@@ -1,0 +1,674 @@
+{
+  "schemaVersion": 1,
+  "id": "case01",
+  "revision": 1,
+  "title": "引っ越した部署だけ、申請画面が開かない",
+  "type": "network",
+  "difficulty": 1,
+  "estimatedMinutes": 10,
+  "prerequisites": ["IP・DNS・TCP・FWの概要（用語辞典で確認できます）"],
+  "brief": "貸出機材を管理する事業所から、調査の依頼が届いた。座席移動のあと、営業チームだけが申請Webを開けなくなっている。ブラウザは待ち続け、最後にはタイムアウトしてしまう。一方で、運用チームは同じWebを利用できている。\n\n依頼は、この状況を生んでいる原因を特定し、必要な通信だけを復旧させること。正常時には、営業と運用の両チームが https://request.example.test のTCP/443へ接続できなければならない。未承認の端末や他のポートまで許可してはいけない。使える状態と、守るべき通信の条件。その両方を満たす調査報告をまとめよう。",
+  "context": {
+    "baseline": [
+      "営業・運用チームは https://request.example.test のTCP/443に接続できる。",
+      "未承認の端末・他のポートは許可しない。"
+    ],
+    "assumptions": [
+      "この事件では営業・運用の許可サブネットに所属する端末は承認済み。未承認端末はその許可サブネット外にある。",
+      "NAT・プロキシ・IPv6・別経路・Web側の送信元制限はない。サーバ側への通信はFWを通り、DNS問い合わせはFWを通らない。",
+      "FWは上から最初に一致するルールを採用する。許可した接続の戻り通信は状態に基づき許可する。",
+      "E05の3ルールが、この方向の新規接続を評価する稼働ルールのすべて。FWログはクライアント側で観測した、該当診断通信の抜粋。",
+      "機器の時刻はJSTで同期済み。調査対象は2026年9月30日10:10〜10:25の固定スナップショット。過去の資料は記録当時の時刻を表示する。",
+      "診断は用意された観測結果を表示する。実際のネットワークには接続しない。結果画面は修復計画を評価し、変更後の新しいログは追加しない。"
+    ],
+    "snapshotTime": "2026-09-30T10:25:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_SALES",
+        "label": "営業チーム / VLAN41",
+        "kind": "client",
+        "addresses": ["10.28.41.0/24", "調査PC 10.28.41.23", "GW 10.28.41.1"]
+      },
+      {
+        "id": "N_OPS",
+        "label": "運用チーム / VLAN42",
+        "kind": "client",
+        "addresses": ["10.28.42.0/24", "比較PC 10.28.42.24", "GW 10.28.42.1"]
+      },
+      {
+        "id": "N_L3",
+        "label": "L3スイッチ",
+        "kind": "switch",
+        "addresses": ["両VLANとDNS側を収容"]
+      },
+      {
+        "id": "N_DNS",
+        "label": "DNS",
+        "kind": "dns",
+        "addresses": ["10.28.10.53"]
+      },
+      {
+        "id": "N_FW",
+        "label": "サーバ用FW",
+        "kind": "firewall",
+        "addresses": ["クライアント側 → サーバ側を制御"]
+      },
+      {
+        "id": "N_WEB",
+        "label": "申請Web",
+        "kind": "server",
+        "addresses": ["10.28.20.18", "TCP/443"]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_SALES",
+        "from": "N_SALES",
+        "to": "N_L3",
+        "label": "営業 ↔ L3"
+      },
+      {
+        "id": "L_OPS",
+        "from": "N_OPS",
+        "to": "N_L3",
+        "label": "運用 ↔ L3"
+      },
+      {
+        "id": "L_DNS",
+        "from": "N_L3",
+        "to": "N_DNS",
+        "label": "L3 ↔ DNS（FWを通らない）"
+      },
+      {
+        "id": "L_FW",
+        "from": "N_L3",
+        "to": "N_FW",
+        "label": "L3 ↔ FW"
+      },
+      {
+        "id": "L_WEB",
+        "from": "N_FW",
+        "to": "N_WEB",
+        "label": "FW ↔ 申請Web（状態に基づく戻り通信）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "現場の報告",
+      "kind": "report",
+      "nodeIds": ["N_SALES", "N_OPS"],
+      "observedAt": "2026-09-30T10:16:00+09:00",
+      "source": "営業・運用担当者",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "table",
+            "columns": ["報告元", "報告内容"],
+            "rows": [
+              [
+                "営業担当",
+                "座席移動後から申請画面がタイムアウト。営業の複数PCで再現。"
+              ],
+              ["運用担当", "同じURLで申請できる。"]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "DNS問い合わせ",
+      "kind": "test",
+      "nodeIds": ["N_SALES", "N_OPS", "N_DNS"],
+      "observedAt": "2026-09-30T10:17:00+09:00",
+      "source": "両PCとDNS管理記録",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "診断：DNS問い合わせ（nslookup）。両PCから10.28.10.53へ request.example.test を問い合わせた。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "10:17 SALES resolver=10.28.10.53 name=request.example.test A=10.28.20.18 TTL=300",
+              "10:17 OPS resolver=10.28.10.53 name=request.example.test A=10.28.20.18 TTL=300"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "管理中の正規Aレコード：request.example.test → 10.28.20.18"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "現在のIPと通信確認",
+      "kind": "test",
+      "nodeIds": ["N_SALES", "N_OPS", "N_WEB"],
+      "observedAt": "2026-09-30T10:18:00+09:00",
+      "source": "営業調査PC・運用比較PC",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "診断：現在IPの確認、GWへのping、宛先IP指定のTCP接続確認。"
+          },
+          {
+            "type": "table",
+            "columns": ["項目", "営業PC", "運用PC"],
+            "rows": [
+              ["現在IP", "10.28.41.23/24", "10.28.42.24/24"],
+              ["GWへのping", "10.28.41.1：成功", "10.28.42.1：成功"],
+              ["10.28.20.18:443へのTCP接続", "タイムアウト", "成功"]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "FWの通信ログ",
+      "kind": "log",
+      "nodeIds": ["N_FW", "N_SALES", "N_OPS", "N_WEB"],
+      "observedAt": "2026-09-30T10:18:08+09:00",
+      "source": "サーバ用FW・クライアント側観測",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "該当するTCP接続確認の記録を抜粋。どちらもクライアント側で観測した通信。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "10:18:03 src=10.28.41.23 dst=10.28.20.18 proto=TCP dport=443 action=DROP rule=99",
+              "10:18:08 src=10.28.42.24 dst=10.28.20.18 proto=TCP dport=443 action=ALLOW rule=20"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "FWの稼働設定",
+      "kind": "config",
+      "nodeIds": ["N_FW"],
+      "observedAt": "2026-09-30T10:19:00+09:00",
+      "source": "サーバ用FW・稼働設定",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "クライアント側→サーバ側の新規接続は上から最初に一致するルールを採用。この方向の評価ルールは以下の3件ですべて。許可した接続の戻り通信は状態に基づき許可する。"
+          },
+          {
+            "type": "table",
+            "columns": ["順序 / ルール", "送信元", "宛先", "通信", "動作"],
+            "rows": [
+              ["10 営業用", "10.28.40.0/24", "10.28.20.18", "TCP/443", "ALLOW"],
+              ["20 運用用", "10.28.42.0/24", "10.28.20.18", "TCP/443", "ALLOW"],
+              ["99 最終", "その他すべて", "すべて", "すべて", "DROP"]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "承認済みの変更記録",
+      "kind": "report",
+      "nodeIds": ["N_SALES", "N_L3", "N_FW", "N_DNS", "N_WEB"],
+      "observedAt": "2026-09-30T10:12:00+09:00",
+      "source": "承認済み作業記録",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:12、営業端末を旧10.28.40.0/24からVLAN41・10.28.41.0/24へ移動。DHCP・L3側の変更は完了。旧サブネットの端末は移設完了で0台。サーバ、DNS、FWの構成と設定は前日から変更なし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "申請Webの状態確認",
+      "kind": "test",
+      "nodeIds": ["N_OPS", "N_WEB"],
+      "observedAt": "2026-09-30T10:18:08+09:00",
+      "source": "運用PC・Webアクセスログ・サーバ監視",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "診断：運用PCから https://request.example.test/health へのHTTPS確認。HTTP 200、証明書検証成功。サーバ監視は正常。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "10:18:08 src=10.28.42.24 dst=10.28.20.18 method=GET path=/health status=200",
+              "10:18:08 client=OPS url=https://request.example.test/health TLS=verified HTTP=200"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "バックアップ機器のアラート記録",
+      "kind": "alert",
+      "nodeIds": [],
+      "observedAt": "2026-09-30T09:20:00+09:00",
+      "source": "BK-2監視記録・機器台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "table",
+            "columns": ["時刻", "対象", "記録"],
+            "rows": [
+              ["09:20", "BK-2", "バックアップ保存先の容量警告"],
+              ["09:45", "BK-2", "容量警告は解消"]
+            ]
+          },
+          {
+            "type": "text",
+            "body": "機器台帳：BK-2は申請Webの通信経路・稼働依存先に含まれない。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_DNS",
+      "label": "DNS応答の誤り",
+      "description": "DNSが申請Webの誤ったIPを返している。"
+    },
+    {
+      "id": "H_WEB",
+      "label": "申請Web全体の停止",
+      "description": "申請Web全体が停止している。"
+    },
+    {
+      "id": "H_ROUTE",
+      "label": "営業VLANの経路不備",
+      "description": "営業VLANの経路不備でFWへ届いていない。"
+    },
+    {
+      "id": "H_FW",
+      "label": "営業用FW許可条件の不一致",
+      "description": "営業用FW許可条件に、移設前の送信元ネットワークが残っている。"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_ALL",
+        "label": "全チームの申請Web",
+        "description": "営業・運用を含む全チームが申請Webを使えない。"
+      },
+      {
+        "id": "S_SALES",
+        "label": "営業の申請Web向けTCP/443",
+        "description": "営業チームから申請WebのTCP/443への通信。"
+      },
+      {
+        "id": "S_DNS",
+        "label": "両チームの全名前解決",
+        "description": "営業・運用の両チームで名前解決全般が失敗する。"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_DNS",
+        "label": "DNS応答の誤り",
+        "description": "DNSが申請Webの誤ったIPを返している。"
+      },
+      {
+        "id": "H_WEB",
+        "label": "申請Web全体の停止",
+        "description": "申請Web全体が停止している。"
+      },
+      {
+        "id": "H_ROUTE",
+        "label": "営業VLANの経路不備",
+        "description": "営業VLANの経路不備でFWへ届いていない。"
+      },
+      {
+        "id": "H_FW",
+        "label": "営業用FW許可条件の不一致",
+        "description": "営業用FW許可条件に、移設前の送信元ネットワークが残っている。"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "C_PING",
+        "label": "GWへのpingだけでWebの正常性が分かる",
+        "description": "GWへのping成功だけで、申請Webも正常と判断できる。"
+      },
+      {
+        "id": "C_DNS",
+        "label": "両PCは今回の宛先を正しく名前解決している",
+        "description": "両PCのDNS応答が、管理中の正規の宛先IPと一致する。"
+      },
+      {
+        "id": "C_BACKUP",
+        "label": "容量警告が申請Webを停止させた",
+        "description": "バックアップ機器の容量警告が、今回の申請Web停止を引き起こした。"
+      },
+      {
+        "id": "C_MISMATCH",
+        "label": "営業の送信元範囲が許可条件に含まれない",
+        "description": "現在の営業の送信元ネットワークが、営業用FW許可条件の範囲に含まれない。"
+      },
+      {
+        "id": "C_OPS",
+        "label": "運用の正常応答から営業の正常性も分かる",
+        "description": "運用PCの正常応答だけで、営業PCからの通信も正常と判断できる。"
+      },
+      {
+        "id": "C_DROP",
+        "label": "営業のTCP/443は最終DROPで遮断される",
+        "description": "営業の申請Web向けTCP/443が、FWの最終DROPルールで遮断されている。"
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "A_REWRITE_DNS",
+        "label": "DNSを別IPへ変更する",
+        "description": "DNSの応答先を別のIPに変更し、利用者に再接続を依頼する。"
+      },
+      {
+        "id": "A_REPAIR",
+        "label": "営業用ルールの送信元だけを更新する",
+        "description": "稼働設定を保全し、承認の上、ルール10の送信元だけを10.28.41.0/24へ変更。宛先10.28.20.18・TCP/443・既存の拒否方針を維持し、旧範囲の許可は残さない。"
+      },
+      {
+        "id": "A_DISABLE_FW",
+        "label": "FWを全面停止する",
+        "description": "サーバ用FWを全面停止し、通信制御を解除して接続を回復させる。"
+      },
+      {
+        "id": "A_RESTART_WEB",
+        "label": "Webの再起動だけを行う",
+        "description": "申請Webを再起動し、利用者に申請画面を開き直してもらう。"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "A_ALLOW_ALL",
+        "label": "全社ネットワークを恒久的に許可する",
+        "description": "FWの許可対象を全社ネットワークへ恒久的に広げ、移設時の通信を通す。"
+      },
+      {
+        "id": "A_CLEAR_DNS",
+        "label": "DNSキャッシュを毎日削除する",
+        "description": "全端末のDNSキャッシュを毎日削除し、名前解決をやり直す。"
+      },
+      {
+        "id": "A_PREVENT",
+        "label": "移設手順にFW更新と疎通試験を追加する",
+        "description": "アドレス・VLAN変更手順に、依存するFW条件の更新と移設元・移設先からの疎通試験を追加する。"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "A_PING_ONLY",
+        "label": "営業PCのGWへのpingだけを確認する",
+        "description": "営業PCからGWへpingを実行し、成功することを確認して復旧とする。"
+      },
+      {
+        "id": "A_VERIFY",
+        "label": "各通信段階と許可・拒否の維持を確認する",
+        "description": "営業から同URLへのDNS・TCP・TLS・HTTPの成功とFWルール10適用、運用の継続成功、未承認端末・他ポートの拒否を確認する。"
+      },
+      {
+        "id": "A_LOCAL_ONLY",
+        "label": "Web内のlocalhostだけを確認する",
+        "description": "Webサーバ自身からlocalhostを確認し、正常応答なら復旧とする。"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "T1",
+      "level": 1,
+      "text": "使えるチームと使えないチームの違いを比べてください。",
+      "evidenceIds": ["E01", "E03"]
+    },
+    {
+      "id": "T2",
+      "level": 2,
+      "text": "現在の送信元アドレスと、FW許可ルールの送信元を比べてください。",
+      "evidenceIds": ["E03", "E05", "E06"]
+    },
+    {
+      "id": "T3",
+      "level": 3,
+      "text": "営業の新しいアドレスがどのルールに一致するか、上から確認してください。",
+      "evidenceIds": ["E03", "E05", "E06"]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "CIDR /24",
+      "definition": "IPv4の先頭24ビットがネットワークを表す記法。10.28.41.0/24には10.28.41.xのアドレスが含まれる。異なる第3オクテットの/24は別の範囲。"
+    },
+    {
+      "term": "DNS",
+      "definition": "名前をIPアドレスなどの情報へ対応付ける仕組み。名前解決ができても、その後のTCP・TLS・HTTPまで成功したとは限らない。"
+    },
+    {
+      "term": "TCP/443",
+      "definition": "TCPの宛先ポート443。HTTPSで一般的に使う。TCP接続の成立後にTLSやHTTPの処理が続く。"
+    },
+    {
+      "term": "FWの最初一致",
+      "definition": "通信の条件をルールの上から順に照合し、最初に一致したルールの動作を採用する方式。"
+    },
+    {
+      "term": "DROP",
+      "definition": "通信を破棄する動作。応答を返さず破棄すると、利用側では待機後のタイムアウトとして見えることがある。"
+    },
+    {
+      "term": "VLAN",
+      "definition": "スイッチ上で論理的に分けたネットワーク。異なるVLAN間の通信にはL3での経路制御が必要。"
+    },
+    {
+      "term": "TLS",
+      "definition": "通信相手の証明書を検証し、通信を暗号化する仕組み。TCP疎通と証明書検証は別の確認段階。"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_SALES",
+    "causeId": "H_FW",
+    "claimRules": [
+      {
+        "claimId": "C_DNS",
+        "requiredEvidenceSets": [["E02"]],
+        "allowedSupportingEvidenceIds": ["E01"],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_DROP",
+        "requiredEvidenceSets": [["E04"]],
+        "allowedSupportingEvidenceIds": ["E03"],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_MISMATCH",
+        "requiredEvidenceSets": [
+          ["E05", "E06"],
+          ["E05", "E03"]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "A_REPAIR",
+    "preventionId": "A_PREVENT",
+    "verificationId": "A_VERIFY",
+    "criticalOptionIds": ["A_DISABLE_FW"],
+    "causalChain": [
+      {
+        "text": "症状：座席移動後、営業だけが申請Webでタイムアウト。運用は同じURLを利用できる。",
+        "evidenceIds": ["E01", "E06"]
+      },
+      {
+        "text": "確認できた事実：両PCの名前解決は正規IPと一致する。運用はTCP・TLS・HTTPに成功。営業はIP指定のTCP接続でも失敗している。",
+        "evidenceIds": ["E02", "E03", "E07"]
+      },
+      {
+        "text": "残る原因：営業の通信はFWで実際に観測され、rule99でDROPされる。GWへのpingだけではWebまでの通信を確認できない。",
+        "evidenceIds": ["E03", "E04"]
+      },
+      {
+        "text": "設定との不一致：移設で営業は10.28.41.0/24へ変わったが、営業用許可条件は旧10.28.40.0/24のまま。新範囲はrule10にもrule20にも一致せず、rule99が適用される。",
+        "evidenceIds": ["E03", "E05", "E06"]
+      },
+      {
+        "text": "対策：設定を保全し承認を得て、営業用ルールの送信元だけを新範囲へ更新する。宛先・TCP/443・拒否方針を保ち、旧範囲の許可は残さない。移設手順にFW条件更新と前後の疎通試験を組み込む。",
+        "evidenceIds": ["E05", "E06"]
+      },
+      {
+        "text": "確認：営業からDNS・TCP・TLS・HTTPとrule10の適用を確認。運用の継続成功と、未承認端末・他ポートの拒否も確認する。これは修復計画の評価であり、修復後の新ログを根拠に追加しない。",
+        "evidenceIds": ["E02", "E03", "E05", "E07"]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_DNS": {
+        "text": "両PCのDNS応答は正規IPと一致し、営業はIP指定でもTCP接続に失敗する。誤った名前解決では説明できない。",
+        "evidenceIds": ["E02", "E03"]
+      },
+      "H_WEB": {
+        "text": "同じ時間帯に運用PCはTCP接続・TLS検証・HTTP 200に成功している。Web全体の停止ではない。",
+        "evidenceIds": ["E03", "E07"]
+      },
+      "H_ROUTE": {
+        "text": "営業の該当通信はFWで観測されDROPされている。FWへ届いていないという仮説は成立しない。GWへのpingだけを反証にしない。",
+        "evidenceIds": ["E04"]
+      },
+      "H_FW": {
+        "text": "営業の現在の送信元と稼働許可条件の不一致が、最終DROPの適用とタイムアウトを説明する。",
+        "evidenceIds": ["E03", "E04", "E05", "E06"]
+      }
+    },
+    "optionFeedback": {
+      "S_SALES": {
+        "text": "営業の申請Web向けTCP/443で失敗が再現し、運用は同じ宛先に成功している。",
+        "evidenceIds": ["E01", "E03"]
+      },
+      "S_ALL": {
+        "text": "運用チームは同じURLを利用できるため、全チームの障害ではない。",
+        "evidenceIds": ["E01", "E03", "E07"]
+      },
+      "S_DNS": {
+        "text": "両PCは正規のAレコードを取得できる。全名前解決の障害という範囲は証拠に合わない。",
+        "evidenceIds": ["E02"]
+      },
+      "H_DNS": {
+        "text": "名前解決は正規IPと一致し、IP指定でも営業のTCP接続は失敗する。",
+        "evidenceIds": ["E02", "E03"]
+      },
+      "H_WEB": {
+        "text": "運用から同時間帯に正常応答が確認でき、Web全体停止ではない。",
+        "evidenceIds": ["E07"]
+      },
+      "H_ROUTE": {
+        "text": "該当通信がFWで観測されている。FW到達前の経路不備ではない。",
+        "evidenceIds": ["E04"]
+      },
+      "H_FW": {
+        "text": "営業の新しい送信元が古い許可条件に含まれず、最終DROPに一致する。",
+        "evidenceIds": ["E03", "E04", "E05", "E06"]
+      },
+      "C_DNS": {
+        "text": "E02で両PCの応答と正規Aレコードを比較できる。E01だけでは両PCの名前解決まで確定しない。",
+        "evidenceIds": ["E01", "E02"]
+      },
+      "C_DROP": {
+        "text": "E04が営業のTCP/443とrule99・DROPの対応を示す。E03だけでは遮断箇所を確定できない。",
+        "evidenceIds": ["E03", "E04"]
+      },
+      "C_MISMATCH": {
+        "text": "E05の送信元条件と、E06の変更後の範囲またはE03の現在IPを比較する。現在の範囲の証拠だけでは稼働設定との不一致を確定できない。",
+        "evidenceIds": ["E03", "E05", "E06"]
+      },
+      "C_PING": {
+        "text": "GWへのpingはGWまでの確認。WebへのTCP、TLS、HTTPが正常とは言えない。",
+        "evidenceIds": ["E03"]
+      },
+      "C_BACKUP": {
+        "text": "警告は障害の前に解消し、BK-2は申請Webの経路・依存先に含まれない。",
+        "evidenceIds": ["E08"]
+      },
+      "C_OPS": {
+        "text": "運用の正常応答は運用の経路の確認。営業からの到達は証明しない。",
+        "evidenceIds": ["E03", "E07"]
+      },
+      "A_REPAIR": {
+        "text": "変更前の設定を保全し、必要な営業送信元だけを更新することで宛先・ポート・拒否方針を保てる。",
+        "evidenceIds": ["E05", "E06"]
+      },
+      "A_DISABLE_FW": {
+        "text": "重大な危険操作：FW全面停止は未承認端末・他ポートの拒否を失わせる。必要な通信だけを復旧する要件を満たさないため、解決とはしない。追加の隠れ減点はしない。",
+        "evidenceIds": ["E05"]
+      },
+      "A_REWRITE_DNS": {
+        "text": "DNSは正規IPを返している。別IPへの変更は今回の許可条件不一致を修復しない。",
+        "evidenceIds": ["E02", "E05"]
+      },
+      "A_RESTART_WEB": {
+        "text": "Webは運用から正常に応答する。再起動だけではFWの送信元条件は更新されない。",
+        "evidenceIds": ["E05", "E07"]
+      },
+      "A_PREVENT": {
+        "text": "アドレス変更に依存するFW条件を更新し、移設元・移設先を確認する手順が同種の不一致を防ぐ。",
+        "evidenceIds": ["E05", "E06"]
+      },
+      "A_ALLOW_ALL": {
+        "text": "恒久的な全社許可は必要な通信だけを許可する要件を損なう。変更手順と依存条件の確認が必要。",
+        "evidenceIds": ["E05", "E06"]
+      },
+      "A_CLEAR_DNS": {
+        "text": "今回の名前解決は正しい。キャッシュ削除ではFWの条件更新漏れを防げない。",
+        "evidenceIds": ["E02", "E05", "E06"]
+      },
+      "A_VERIFY": {
+        "text": "通信の各段階と正しいルールの適用に加え、既存利用者の継続成功と拒否方針も確認する。",
+        "evidenceIds": ["E02", "E03", "E05", "E07"]
+      },
+      "A_PING_ONLY": {
+        "text": "GWへのpingだけではFW以降、TLS、HTTP、必要な拒否方針を確認できない。",
+        "evidenceIds": ["E03", "E05"]
+      },
+      "A_LOCAL_ONLY": {
+        "text": "localhostは営業からの経路やFW条件、運用の継続成功を確認できない。",
+        "evidenceIds": ["E03", "E05", "E07"]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "影響範囲と比較対象",
+      "E02": "誤った名前解決を反証",
+      "E03": "通信段階の差と現在送信元",
+      "E04": "遮断箇所と適用ルール",
+      "E05": "営業用の旧送信元条件",
+      "E06": "変更後の送信元範囲と発生時刻",
+      "E07": "Web全体停止とTLS全体不良の反証",
+      "E08": "時刻・対象・依存関係で判別するノイズ"
+    }
+  }
+}
