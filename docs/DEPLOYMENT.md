@@ -40,6 +40,6 @@ iPhone SafariとAndroid Chromeそれぞれで、端末・OS・ブラウザのバ
 
 HTTPS配信の成功と物理端末での動作検証は別の確認として記録する。BrowserStackではログイン後、iPhone 16 / iOS 18.6 / Safariの物理端末から配信URLへ到達し、所有者向けログイン画面を確認した。無料枠の1セッション1分が終了したため、ゲーム本体・全工程・保存・オフライン・初回転送量の確認は未完了。ユーザーは手元のスマートフォンで配信URLを開く方法を選択した。機種・OS・確認結果の報告はまだなく、未検証の項目を成功扱いしない。
 
-2026-10-05時点でリポジトリは非公開、Pages GET APIは404、公開URLは未設定。Pages作成APIは現在のプランがこのリポジトリに対応しないというHTTP 422を返し、サイトは作成されなかった。リポジトリの公開化や新規契約は行っていない。ワークフローは公開準備であり、実際の配信成功や実機確認の証跡ではない。物理端末の全工程操作・オフライン操作・HTTPS配信での実機転送量測定が済むまで、MVPの完成条件を満たしたとは扱わない。
+2026-10-05時点でリポジトリは非公開、Pages GET APIは404、GitHub Pagesの公開URLは未設定。Pages作成APIは現在のプランがこのリポジトリに対応しないというHTTP 422を返し、Pagesサイトは作成されなかった。リポジトリの公開化や新規契約は行っていない。GitHub Pagesワークフローは配信準備であり、Pages配信成功や実機確認の証跡ではない。物理端末の全工程操作・オフライン操作・HTTPS配信での実機転送量測定が済むまで、MVPの完成条件を満たしたとは扱わない。
 
 参考：[GitHub Pagesの利用条件](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)、[公式の配信ワークフロー](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
