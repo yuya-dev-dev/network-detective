@@ -10,12 +10,22 @@ export function Dialog({
   close: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
   useEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
     return () => {
       if (dialog.open) dialog.close();
     };
+  }, []);
+  useEffect(() => {
+    const onNavigate = () => {
+      ref.current?.close();
+      closeRef.current();
+    };
+    window.addEventListener("hashchange", onNavigate);
+    return () => window.removeEventListener("hashchange", onNavigate);
   }, []);
   return (
     <dialog ref={ref} onCancel={close} aria-label={title}>

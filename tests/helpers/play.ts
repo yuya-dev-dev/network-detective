@@ -5,6 +5,11 @@ export const tab = (page: Page, name: string) =>
   page
     .getByRole("navigation", { name: "調査タブ" })
     .getByRole("button", { name, exact: true });
+export async function openReportGroup(page: Page, field: string) {
+  const group = page.locator(`.report-group[data-report-field="${field}"]`);
+  if (!(await group.evaluate((e: HTMLDetailsElement) => e.open)))
+    await group.locator("summary").click();
+}
 export async function start(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
@@ -33,6 +38,7 @@ export async function fill(page: Page, report: Report) {
     "preventionId",
     "verificationId",
   ] as const) {
+    await openReportGroup(page, field);
     const input = page.locator(
       `input[name="${field}"][value="${report[field]}"]`,
     );
@@ -40,6 +46,7 @@ export async function fill(page: Page, report: Report) {
     await expect(input).toBeChecked();
   }
   for (const claim of report.claims) {
+    await openReportGroup(page, "claims");
     const label = scenario.reportOptions.claimOptions.find(
       (o) => o.id === claim.claimId,
     )!.label;

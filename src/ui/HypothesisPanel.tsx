@@ -21,9 +21,8 @@ export function HypothesisPanel({
         複数を「有力」にできます。ここでの分類や関連付けは採点しません。
       </p>
       {scenario.hypotheses.map((h) => (
-        <article key={h.id} className="paper-card">
+        <article key={h.id} className="paper-card hypothesis-card">
           <h3>{h.label}</h3>
-          <p>{h.description}</p>
           <div className="segmented">
             {(
               [
@@ -49,13 +48,14 @@ export function HypothesisPanel({
           </div>
           <details>
             <summary>
-              証拠を支持・反証として結ぶ（
+              説明・証拠（
               {
                 attempt.evidenceLinks.filter((l) => l.hypothesisId === h.id)
                   .length
               }
-              件）
+              ）
             </summary>
+            <p>{h.description}</p>
             {available.length === 0 ? (
               <p>先に証拠を開いてみよう。</p>
             ) : (

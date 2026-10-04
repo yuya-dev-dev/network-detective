@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { pwaServer } from "../helpers/pwaServer";
-import { readAll, fill, submit, tab } from "../helpers/play";
+import { readAll, fill, submit, tab, openReportGroup } from "../helpers/play";
 import { correctReport } from "../helpers/report";
 import { storageKey } from "../../src/storage/localStorage";
 test("cached application and case play completely offline under a subdirectory", async ({
@@ -79,6 +79,7 @@ test("updates wait for the list, require saving and protect other open tabs", as
     await page.getByRole("button", { name: "現場の調査を始める" }).click();
     await tab(page, "報告").click();
     const input = page.locator('input[name="scopeId"]').first();
+    await openReportGroup(page, "scopeId");
     await input.check();
     await expect(input).toBeChecked();
     const before = await page.evaluate(

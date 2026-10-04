@@ -75,7 +75,7 @@ export function Investigation({
             </span>
           </div>
           <p className="muted">
-            すべての資料・診断を好きな順番で調べられます。同じ診断は常に同じ結果です。
+            どれからでも調べられます。診断結果は固定です。
           </p>
           <div className="segmented">
             <button aria-pressed={!pinnedOnly} onClick={() => filter(false)}>
@@ -108,15 +108,11 @@ export function Investigation({
                       {attempt.pinnedEvidenceIds.includes(e.id)
                         ? " · ◆ ピン留め"
                         : ""}
+                      {attempt.openedEvidenceIds.includes(e.id)
+                        ? " · 閲覧済み"
+                        : ""}
                     </span>
                     <strong>{e.title}</strong>
-                    <small>
-                      {attempt.openedEvidenceIds.includes(e.id)
-                        ? "閲覧済み · もう一度開く"
-                        : e.acquisition === "diagnostic"
-                          ? "診断結果を見る"
-                          : "資料を開く"}
-                    </small>
                   </span>
                   <span className="chevron">›</span>
                 </button>

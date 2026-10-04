@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { playableScenario as scenario, getSolution } from "../scenario/load";
 import narrative from "../data/narrative.json";
 import { useGame } from "./GameProvider";
@@ -55,6 +55,27 @@ export default function App() {
   const [thought, think] = useState(() => narrative.tabs[readView().tab]);
   const positions = useRef<Record<string, number>>({});
   const previousHash = useRef(location.hash || "#list");
+  const shell = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = shell.current!;
+    const header = element.querySelector(".app-header");
+    const dock = element.querySelector(".game-dock");
+    const measure = () => {
+      element.style.setProperty(
+        "--header-height",
+        `${header?.getBoundingClientRect().height ?? 0}px`,
+      );
+      element.style.setProperty(
+        "--dock-height",
+        `${dock?.getBoundingClientRect().height ?? 0}px`,
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    if (header) observer.observe(header);
+    if (dock) observer.observe(dock);
+    measure();
+    return () => observer.disconnect();
+  }, [view.screen]);
   const attempt = save.activeAttempt;
   const locked =
     attempt?.phase === "submitted" || attempt?.phase === "completed";
@@ -147,6 +168,7 @@ export default function App() {
             : thought;
   return (
     <div
+      ref={shell}
       className={`app-shell ${view.screen === "title" ? "title-mode" : ""} ${view.screen === "investigation" ? "investigating" : ""}`}
     >
       {view.screen !== "title" && (

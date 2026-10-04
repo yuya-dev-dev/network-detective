@@ -7,7 +7,15 @@ import { correctReport } from "../helpers/report";
 import type { Report } from "../../src/game/types";
 import { storageKey } from "../../src/storage/localStorage";
 const key = storageKey(scenario.id);
-import { tab, start, readAll, fill, submit, noOverflow } from "../helpers/play";
+import {
+  tab,
+  start,
+  readAll,
+  fill,
+  submit,
+  noOverflow,
+  openReportGroup,
+} from "../helpers/play";
 test("complete mobile investigation, hints, explanation links and separate retry records", async ({
   page,
 }, info) => {
@@ -114,6 +122,7 @@ test("draft, pinning and hypothesis notes survive browser back and reload", asyn
   await page.getByRole("button", { name: "証拠一覧へ戻る" }).click();
   await tab(page, "報告").click();
   const input = page.locator('input[name="causeId"]').first();
+  await openReportGroup(page, "causeId");
   await input.check();
   await expect(input).toBeChecked();
   await page.goBack();
@@ -223,6 +232,136 @@ test("broken saves and storage failure are recoverable", async ({ page }) => {
   await expect(page.getByText("保存不可", { exact: true })).toBeVisible();
   await tab(page, "証拠").click();
   await expect(page.locator(".evidence-card")).toHaveCount(8);
+});
+test("topology overview fits above the dock and expands without losing nodes", async ({
+  page,
+}) => {
+  await start(page);
+  for (const [width, height] of [
+    [360, 640],
+    [390, 844],
+    [430, 932],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const map = document
+            .querySelector(".map-overview")!
+            .getBoundingClientRect();
+          const actions = document
+            .querySelector(".map-actions")!
+            .getBoundingClientRect();
+          const dock = document
+            .querySelector(".game-dock")!
+            .getBoundingClientRect();
+          const header = document
+            .querySelector(".app-header")!
+            .getBoundingClientRect();
+          const nodes = [
+            ...document.querySelectorAll(".map-overview g[role=button]"),
+          ];
+          return (
+            map.top >= header.bottom &&
+            actions.bottom <= dock.top &&
+            nodes.length === 6 &&
+            nodes.every((node) => node.getBoundingClientRect().height >= 44)
+          );
+        }),
+      )
+      .toBe(true);
+    await noOverflow(page);
+  }
+  await page
+    .getByRole("button", { name: "拡大して見る ↗", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "構成図を拡大",
+    exact: true,
+  });
+  await expect(dialog.locator("g[role=button]")).toHaveCount(6);
+  await dialog
+    .getByRole("button", { name: "構成図を拡大", exact: true })
+    .click();
+  await expect(dialog.getByText("175%", { exact: true })).toBeVisible();
+  const region = dialog.getByRole("region", { name: "拡大構成図" });
+  expect(await region.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(
+    true,
+  );
+  await dialog
+    .getByRole("button", {
+      name: `${scenario.topology.nodes[5].label}の詳細`,
+      exact: true,
+    })
+    .click();
+  await expect(
+    dialog.getByRole("heading", {
+      name: scenario.topology.nodes[5].label,
+      exact: true,
+    }),
+  ).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "閉じる", exact: true })
+    .last()
+    .click();
+  await expect(page.locator(".map-overview")).toBeVisible();
+});
+test("browser back closes topology and report dialogs without blocking tabs", async ({
+  page,
+}) => {
+  await start(page);
+  await tab(page, "証拠").click();
+  for (const name of [
+    "拡大して見る ↗",
+    `${scenario.topology.nodes[0].label}の詳細`,
+  ]) {
+    await tab(page, "構成").click();
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.locator("dialog:modal")).toHaveCount(1);
+    await page.goBack();
+    await expect(page.locator("dialog:modal")).toHaveCount(0);
+    await expect(page.locator(".evidence-card")).toHaveCount(8);
+  }
+  await fill(page, { ...correctReport(), claims: [] });
+  await page.getByRole("button", { name: "報告内容を確認する" }).click();
+  await expect(page.locator("dialog:modal")).toHaveCount(1);
+  await page.goBack();
+  await expect(page.locator("dialog:modal")).toHaveCount(0);
+  await tab(page, "報告").click();
+  await expect(page.locator("dialog:modal")).toHaveCount(0);
+  await page.getByRole("button", { name: "報告内容を確認する" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+test("report overview exposes missing input and keeps selections across tabs", async ({
+  page,
+}) => {
+  await start(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await tab(page, "報告").click();
+  await expect(page.locator(".report-group")).toHaveCount(6);
+  await expect(page.locator(".report-group[open]")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() =>
+    document.querySelector(".report-page > .primary")!.getBoundingClientRect().bottom <=
+    document.querySelector(".game-dock")!.getBoundingClientRect().top
+  )).toBe(true);
+  await page.getByRole("button", { name: "報告内容を確認する" }).click();
+  await expect(
+    page.locator('.report-group[data-report-field="scopeId"]'),
+  ).toHaveAttribute("open", "");
+  const input = page.locator('input[name="scopeId"]').first();
+  await input.check();
+  const summary = page.locator(
+    '.report-group[data-report-field="scopeId"] summary',
+  );
+  await expect(summary).toContainText(
+    scenario.reportOptions.scopeOptions[0].label,
+  );
+  await tab(page, "証拠").click();
+  await tab(page, "報告").click();
+  await expect(input).toBeChecked();
+  await expect(
+    page.locator('.report-group[data-report-field="scopeId"]'),
+  ).toHaveAttribute("open", "");
 });
 test("a critical selection never succeeds and adds no hidden penalty", async ({
   page,

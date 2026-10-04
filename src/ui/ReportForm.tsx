@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { PlayableScenario } from "../scenario/types";
 import type { Report } from "../game/types";
 import { validateReport } from "../game/scoring";
@@ -20,6 +20,7 @@ export function ReportForm({
 }) {
   const [confirming, confirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const form = useRef<HTMLElement>(null);
   const groups = [
     ["scopeId", "scopeOptions", "影響範囲", "10点"],
     ["causeId", "causeOptions", "根本原因", "30点"],
@@ -36,115 +37,151 @@ export function ReportForm({
       confirm(true);
     } catch (e) {
       setError((e as Error).message);
+      const missing = groups.find(([field]) => !report[field]);
+      const section = form.current?.querySelector<HTMLDetailsElement>(
+        `details[data-report-field="${missing?.[0] ?? "claims"}"]`,
+      );
+      if (section) {
+        section.open = true;
+        section.scrollIntoView({ block: "start" });
+        section.querySelector("summary")?.focus();
+      }
     }
   };
   const claims = (
-    <fieldset>
-      <legend>
-        判断根拠 <span>最大30点</span>
-      </legend>
-      <p className="muted">
-        主張は最大3枚。選んだ主張ごとに、閲覧した証拠を1〜2件添付します。
-      </p>
-      {scenario.reportOptions.claimOptions.map((o) => {
-        const claim = report.claims.find((c) => c.claimId === o.id);
-        return (
-          <div className={`claim-option ${claim ? "selected" : ""}`} key={o.id}>
-            <label className="option">
-              <input
-                type="checkbox"
-                checked={!!claim}
-                disabled={!claim && report.claims.length >= 3}
-                onChange={() =>
-                  change({
-                    ...report,
-                    claims: claim
-                      ? report.claims.filter((c) => c.claimId !== o.id)
-                      : [...report.claims, { claimId: o.id, evidenceIds: [] }],
-                  })
-                }
-              />
-              <span>
-                <strong>{o.label}</strong>
-                <small>{o.description}</small>
-              </span>
-            </label>
-            {claim && (
-              <div className="claim-evidence">
-                {candidates.length ? (
-                  candidates.map((e) => (
-                    <label key={e.id} className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={claim.evidenceIds.includes(e.id)}
-                        disabled={
-                          !claim.evidenceIds.includes(e.id) &&
-                          claim.evidenceIds.length >= 2
-                        }
-                        onChange={() =>
-                          change({
-                            ...report,
-                            claims: report.claims.map((c) =>
-                              c.claimId !== o.id
-                                ? c
-                                : {
-                                    ...c,
-                                    evidenceIds: c.evidenceIds.includes(e.id)
-                                      ? c.evidenceIds.filter(
-                                          (id) => id !== e.id,
-                                        )
-                                      : [...c.evidenceIds, e.id],
-                                  },
-                            ),
-                          })
-                        }
-                      />
-                      <span>
-                        {e.id} {e.title}
-                      </span>
-                    </label>
-                  ))
-                ) : (
-                  <p>証拠タブで資料を開くと添付できます。</p>
-                )}
-                <p className="muted">添付：{claim.evidenceIds.length}/2</p>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </fieldset>
-  );
-  return (
-    <section>
-      <span className="eyebrow">INVESTIGATION REPORT</span>
-      <h2>調査報告をまとめる</h2>
-      <p>提出はこの試行で1回。まだ気になることがあれば、調査へ戻れます。</p>
-      {groups.map(([field, group, title, points], index) => (
-        <div key={field}>
-          <fieldset>
-            <legend>
-              {title} <span>{points}</span>
-            </legend>
-            {scenario.reportOptions[group].map((o) => (
-              <label
-                key={o.id}
-                className={`option ${report[field] === o.id ? "selected" : ""}`}
-              >
+    <details className="report-group" data-report-field="claims">
+      <summary>
+        <span>判断根拠</span>
+        <small>
+          {report.claims.length}/3主張
+          {report.claims.some((c) => c.evidenceIds.length === 0)
+            ? " · 証拠未添付"
+            : ""}
+        </small>
+      </summary>
+      <fieldset>
+        <legend>
+          判断根拠 <span>最大30点</span>
+        </legend>
+        <p className="muted">
+          主張は最大3枚。選んだ主張ごとに、閲覧した証拠を1〜2件添付します。
+        </p>
+        {scenario.reportOptions.claimOptions.map((o) => {
+          const claim = report.claims.find((c) => c.claimId === o.id);
+          return (
+            <div
+              className={`claim-option ${claim ? "selected" : ""}`}
+              key={o.id}
+            >
+              <label className="option">
                 <input
-                  type="radio"
-                  name={field}
-                  value={o.id}
-                  checked={report[field] === o.id}
-                  onChange={() => change({ ...report, [field]: o.id })}
+                  type="checkbox"
+                  checked={!!claim}
+                  disabled={!claim && report.claims.length >= 3}
+                  onChange={() =>
+                    change({
+                      ...report,
+                      claims: claim
+                        ? report.claims.filter((c) => c.claimId !== o.id)
+                        : [
+                            ...report.claims,
+                            { claimId: o.id, evidenceIds: [] },
+                          ],
+                    })
+                  }
                 />
                 <span>
                   <strong>{o.label}</strong>
                   <small>{o.description}</small>
                 </span>
               </label>
-            ))}
-          </fieldset>
+              {claim && (
+                <div className="claim-evidence">
+                  {candidates.length ? (
+                    candidates.map((e) => (
+                      <label key={e.id} className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={claim.evidenceIds.includes(e.id)}
+                          disabled={
+                            !claim.evidenceIds.includes(e.id) &&
+                            claim.evidenceIds.length >= 2
+                          }
+                          onChange={() =>
+                            change({
+                              ...report,
+                              claims: report.claims.map((c) =>
+                                c.claimId !== o.id
+                                  ? c
+                                  : {
+                                      ...c,
+                                      evidenceIds: c.evidenceIds.includes(e.id)
+                                        ? c.evidenceIds.filter(
+                                            (id) => id !== e.id,
+                                          )
+                                        : [...c.evidenceIds, e.id],
+                                    },
+                              ),
+                            })
+                          }
+                        />
+                        <span>
+                          {e.id} {e.title}
+                        </span>
+                      </label>
+                    ))
+                  ) : (
+                    <p>証拠タブで資料を開くと添付できます。</p>
+                  )}
+                  <p className="muted">添付：{claim.evidenceIds.length}/2</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </fieldset>
+    </details>
+  );
+  return (
+    <section ref={form} className="report-page">
+      <span className="eyebrow">INVESTIGATION REPORT</span>
+      <h2>調査報告をまとめる</h2>
+      <p>提出はこの試行で1回。まだ気になることがあれば、調査へ戻れます。</p>
+      {groups.map(([field, group, title, points], index) => (
+        <div key={field}>
+          <details className="report-group" data-report-field={field}>
+            <summary>
+              <span>{title}</span>
+              <small>
+                {scenario.reportOptions[group].find(
+                  (o) => o.id === report[field],
+                )?.label ?? "未選択"}
+              </small>
+            </summary>
+            <fieldset>
+              <legend>
+                {title} <span>{points}</span>
+              </legend>
+              {scenario.reportOptions[group].map((o) => (
+                <label
+                  key={o.id}
+                  className={`option ${report[field] === o.id ? "selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name={field}
+                    value={o.id}
+                    checked={report[field] === o.id}
+                    onChange={() => change({ ...report, [field]: o.id })}
+                  />
+                  <span>
+                    <strong>{o.label}</strong>
+                    <small>{o.description}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          </details>
           {index === 1 && claims}
         </div>
       ))}
