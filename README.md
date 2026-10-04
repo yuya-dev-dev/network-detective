@@ -65,5 +65,6 @@ Linuxのブラウザ実行に必要なOSライブラリは `npx playwright insta
 - [田中の独立レビュー](docs/REVIEW.md)
 - [作家による演出の方針](docs/NARRATIVE_NOTES.md)
 - [イラストの生成記録](docs/ART_DIRECTION.md)
+- [HTTPS配信と実機確認](docs/DEPLOYMENT.md)
 
 **シナリオJSON、採点テスト、実装資料、レビューには解答情報を含みます。未プレイの場合は、ゲーム画面から始めてください。**

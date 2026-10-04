@@ -123,3 +123,9 @@ Edge headlessの幅指定やPlaywrightのモバイルプロファイルは、実
 390×844で11枚のサンプルと一覧画像を撮影し、文字の切れ、重なり、画像欠落、構成図と報告概要の下部パネルとの重なりをrootが目視確認した。結果は解答を避けて得点部分のみを撮影している。実機とHTTPS実配信の未検証条件は引き続き残る。
 
 最終検証：rootが単体45件（4ファイル）とChromium/WebKit各14件のE2E計28件を実行し、すべて成功した。E2Eは約3.5分。データ契約・型確認・本番ビルド・Service Worker生成・差分の空白確認が成功。7資産とService Workerのローカルgzip合計は209.5KiB。上の2026-10-02の検証数値は当時の記録として残し、この節を最新の結果とする。
+
+## HTTPS配信準備のレビュー
+
+手動実行のみのPagesワークフローと配信手順を田中が独立レビューした。buildはcontents:readとpages:read、deployだけpages:writeとid-token:writeを持ち、needs:buildとgithub-pages環境を使う。単体テスト・ビルドが成功した後にdistのみを配信する構造は公式の構成に合い、過剰設計はない。distの実物8ファイルにはREADME・docs・テスト・画面サンプルが含まれないことも確認した。
+
+文書の小さな指摘2件を修正した。localStorageはURL全体ではなくorigin単位であること、GitHub Pagesのキャッシュ設定と最新資産のみの配信を一般的な静的ホストの推奨から分けた。rootはワークフローのYAML構文・書式をPrettierで確認し、checkout/setup-nodeのv6タグが存在することを確認した。GitHub上のワークフロー実行・HTTPS配信・実機確認は未実施であり、配信準備を完成条件の証跡として代用しない。ゲームのソース・データ・採点の追加変更はない。
