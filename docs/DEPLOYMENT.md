@@ -28,6 +28,8 @@ iPhone SafariとAndroid Chromeそれぞれで、端末・OS・ブラウザのバ
 
 ## 現在の状態
 
-2026-10-05時点でリポジトリは非公開、Pages APIは404、公開URLは未設定。ワークフローは公開準備であり、実際の配信成功や実機確認の証跡ではない。物理端末の全工程操作・オフライン操作・HTTPS配信での実機転送量測定が済むまで、MVPの完成条件を満たしたとは扱わない。
+Sitesの所有者限定サイト「通信捜査室」を登録し、`.openai/hosting.json` に固定IDと静的配信対象 `dist` を保存した。サイトは未公開、ソース・配信アーカイブの送信も未実施。公式Sitesワークフローによるソース送信は自動承認レビューが、非公開ソースをSitesへ送る具体的な承認がないという理由で実行前に拒否した。許可された後に同じサイトIDを再利用し、ソース保存・アーカイブ作成・非公開配信を進める。登録済みであることを配信成功とは扱わない。
+
+2026-10-05時点でリポジトリは非公開、Pages GET APIは404、公開URLは未設定。Pages作成APIは現在のプランがこのリポジトリに対応しないというHTTP 422を返し、サイトは作成されなかった。リポジトリの公開化や新規契約は行っていない。ワークフローは公開準備であり、実際の配信成功や実機確認の証跡ではない。物理端末の全工程操作・オフライン操作・HTTPS配信での実機転送量測定が済むまで、MVPの完成条件を満たしたとは扱わない。
 
 参考：[GitHub Pagesの利用条件](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)、[公式の配信ワークフロー](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
