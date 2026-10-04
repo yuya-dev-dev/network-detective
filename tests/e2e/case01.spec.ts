@@ -82,7 +82,7 @@ test("complete mobile investigation, hints, explanation links and separate retry
   await expect(page.locator(".score")).toHaveText("100/100");
   await page.locator(".evidence-refs button").first().click();
   await expect(page.getByText("解説から証拠を確認中 · 閲覧のみ")).toBeVisible();
-  await expect(page.getByRole("button", { name: /ピン留め/ })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: /確認済み/ })).toHaveCount(0);
   await page.getByRole("button", { name: "解説へ戻る" }).click();
   await page.goto("/#investigation/report");
   await expect(page.locator(".result-banner")).toBeVisible();
@@ -92,8 +92,12 @@ test("complete mobile investigation, hints, explanation links and separate retry
   const second = {
     ...correctReport(),
     causeId: scenario.hypotheses[0].id,
-    claims: [],
+    claims: correctReport().claims.map((claim) => ({
+      ...claim,
+      evidenceIds: ["E08"],
+    })),
   };
+  await readAll(page);
   await fill(page, second);
   await submit(page);
   await expect(page.locator(".result-banner h1")).toHaveText(
@@ -109,16 +113,18 @@ test("complete mobile investigation, hints, explanation links and separate retry
   expect(external).toEqual([]);
   await page.screenshot({ path: info.outputPath("completed-list.png") });
 });
-test("draft, pinning and hypothesis notes survive browser back and reload", async ({
+test("draft, confirmation checks and hypothesis notes survive browser back and reload", async ({
   page,
 }) => {
   await start(page);
   await tab(page, "証拠").click();
   await page.locator('[data-evidence-id="E01"]').click();
-  await page.getByRole("button", { name: "◇ ピン留め", exact: true }).click();
+  await page
+    .getByRole("checkbox", { name: "E01を確認済みにする", exact: true })
+    .check();
   await expect(
-    page.getByRole("button", { name: "◆ ピン留め済み", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("checkbox", { name: "E01を確認済みにする", exact: true }),
+  ).toBeChecked();
   await page.getByRole("button", { name: "証拠一覧へ戻る" }).click();
   await tab(page, "報告").click();
   const input = page.locator('input[name="causeId"]').first();
@@ -135,7 +141,7 @@ test("draft, pinning and hypothesis notes survive browser back and reload", asyn
   await expect(input).toBeChecked();
   await tab(page, "証拠").click();
   await page
-    .getByRole("button", { name: "ピン留め（1）", exact: true })
+    .getByRole("button", { name: "確認済み（1）", exact: true })
     .click();
   await expect(page.locator(".evidence-card")).toHaveCount(1);
 });
@@ -322,7 +328,8 @@ test("browser back closes topology and report dialogs without blocking tabs", as
     await expect(page.locator("dialog:modal")).toHaveCount(0);
     await expect(page.locator(".evidence-card")).toHaveCount(8);
   }
-  await fill(page, { ...correctReport(), claims: [] });
+  await readAll(page);
+  await fill(page, correctReport());
   await page.getByRole("button", { name: "報告内容を確認する" }).click();
   await expect(page.locator("dialog:modal")).toHaveCount(1);
   await page.goBack();
@@ -340,10 +347,17 @@ test("report overview exposes missing input and keeps selections across tabs", a
   await tab(page, "報告").click();
   await expect(page.locator(".report-group")).toHaveCount(6);
   await expect(page.locator(".report-group[open]")).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() =>
-    document.querySelector(".report-page > .primary")!.getBoundingClientRect().bottom <=
-    document.querySelector(".game-dock")!.getBoundingClientRect().top
-  )).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector(".report-page > .primary")!
+            .getBoundingClientRect().bottom <=
+          document.querySelector(".game-dock")!.getBoundingClientRect().top,
+      ),
+    )
+    .toBe(true);
   await page.getByRole("button", { name: "報告内容を確認する" }).click();
   await expect(
     page.locator('.report-group[data-report-field="scopeId"]'),
@@ -384,7 +398,8 @@ test("other tabs cannot overwrite a submitted attempt or the first record", asyn
   context,
 }) => {
   await start(page);
-  await fill(page, { ...correctReport(), claims: [] });
+  await readAll(page);
+  await fill(page, correctReport());
   const other = await context.newPage();
   await other.goto("/#investigation/report");
   await expect(tab(other, "報告")).toBeVisible();
@@ -416,7 +431,8 @@ test("simultaneous submissions are serialized across tabs", async ({
   context,
 }) => {
   await start(page);
-  await fill(page, { ...correctReport(), claims: [] });
+  await readAll(page);
+  await fill(page, correctReport());
   const other = await context.newPage();
   await other.goto("/#investigation/report");
   await Promise.all([
@@ -475,4 +491,231 @@ test("simultaneous submissions are serialized across tabs", async ({
   );
   expect(value.records).toHaveLength(1);
   expect(value.activeAttempt.result).toEqual(value.records[0].result);
+});
+
+test("evidence-list checks are independent of opening and survive reload", async ({
+  page,
+}) => {
+  await start(page);
+  await tab(page, "証拠").click();
+  const evidence = scenario.evidence[0];
+  const checkbox = page.getByRole("checkbox", {
+    name: `${evidence.id}を確認済みにする`,
+    exact: true,
+  });
+  await expect(checkbox).not.toBeChecked();
+  await checkbox.check();
+  await expect(checkbox).toBeChecked();
+  await expect(
+    page.getByRole("heading", { name: "資料と診断", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("閲覧 0/8", { exact: true })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) =>
+          JSON.parse(localStorage.getItem(key)!).activeAttempt
+            .pinnedEvidenceIds,
+        key,
+      ),
+    )
+    .toEqual([evidence.id]);
+  await page.reload();
+  await expect(checkbox).toBeChecked();
+  await expect(page.getByText("閲覧 0/8", { exact: true })).toBeVisible();
+  const target = await checkbox.locator("..").boundingBox();
+  expect(target!.width).toBeGreaterThanOrEqual(44);
+  expect(target!.height).toBeGreaterThanOrEqual(44);
+  await page.locator(`[data-evidence-id="${evidence.id}"]`).click();
+  await expect(checkbox).toBeChecked();
+  await expect(
+    page.getByRole("heading", { name: evidence.title, exact: true }),
+  ).toBeVisible();
+  await checkbox.uncheck();
+  await page.getByRole("button", { name: "証拠一覧へ戻る" }).click();
+  await expect(checkbox).not.toBeChecked();
+  await expect(page.getByText("閲覧 1/8", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(checkbox).not.toBeChecked();
+});
+
+test("concurrent confirmation checks set ON once across tabs instead of toggling twice", async ({
+  page,
+  context,
+}) => {
+  await start(page);
+  await tab(page, "証拠").click();
+  const evidence = scenario.evidence[0];
+  const other = await context.newPage();
+  await other.goto("/#investigation/evidence");
+  const first = page.getByRole("checkbox", {
+    name: `${evidence.id}を確認済みにする`,
+    exact: true,
+  });
+  const second = other.getByRole("checkbox", {
+    name: `${evidence.id}を確認済みにする`,
+    exact: true,
+  });
+  await expect(first).not.toBeChecked();
+  await expect(second).not.toBeChecked();
+  await page.evaluate((key) => {
+    const control = window as typeof window & {
+      lockHeld?: boolean;
+      releaseLock?: () => void;
+    };
+    void navigator.locks.request(
+      key,
+      () =>
+        new Promise<void>((resolve) => {
+          control.releaseLock = resolve;
+          control.lockHeld = true;
+        }),
+    );
+  }, key);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as typeof window & { lockHeld?: boolean }).lockHeld,
+      ),
+    )
+    .toBe(true);
+  try {
+    await Promise.all([first.check(), second.check()]);
+    await expect(first).toBeChecked();
+    await expect(second).toBeChecked();
+  } finally {
+    await page.evaluate(() =>
+      (window as typeof window & { releaseLock?: () => void }).releaseLock!(),
+    );
+  }
+  // Wait behind both real checkbox writes before reloading either tab.
+  await page.evaluate((key) => navigator.locks.request(key, () => {}), key);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) =>
+          JSON.parse(localStorage.getItem(key)!).activeAttempt
+            .pinnedEvidenceIds,
+        key,
+      ),
+    )
+    .toEqual([evidence.id]);
+  await other.reload();
+  await expect(second).toBeChecked();
+  await expect(first).toBeChecked();
+  await expect(page.getByText("閲覧 0/8", { exact: true })).toBeVisible();
+  await second.uncheck();
+  await expect(first).not.toBeChecked();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) =>
+          JSON.parse(localStorage.getItem(key)!).activeAttempt
+            .pinnedEvidenceIds,
+        key,
+      ),
+    )
+    .toEqual([]);
+});
+
+test("report requires three claims, explains evidence counts and preserves partial credit", async ({
+  page,
+}) => {
+  await start(page);
+  await readAll(page);
+  const complete = correctReport();
+  await fill(page, { ...complete, claims: [] });
+  const summary = page.locator('[data-report-field="claims"] > summary');
+  await expect(summary).toContainText("主張3枚を選択 · 0/3枚");
+  await page.getByRole("button", { name: "報告内容を確認する" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "判断根拠の主張を3枚選んでください",
+  );
+  await expect(page.locator("dialog:modal")).toHaveCount(0);
+  for (const option of scenario.reportOptions.claimOptions) {
+    const card = page.locator(".claim-option").filter({
+      has: page.getByText(option.label, { exact: true }),
+    });
+    await expect(card.locator(".claim-requirement")).toHaveText(
+      `必要な証拠：${option.requiredEvidenceCount}件`,
+    );
+  }
+  const partialOption = scenario.reportOptions.claimOptions.find(
+    (option) =>
+      option.requiredEvidenceCount === 2 &&
+      complete.claims.some((claim) => claim.claimId === option.id),
+  )!;
+  const remaining = complete.claims.filter(
+    (claim) => claim.claimId !== partialOption.id,
+  );
+  await fill(page, { ...complete, claims: remaining });
+  await expect(summary).toContainText("2/3枚");
+  await page.getByRole("button", { name: "報告内容を確認する" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "判断根拠の主張を3枚選んでください",
+  );
+  await expect(page.locator("dialog:modal")).toHaveCount(0);
+  const partial = complete.claims.find(
+    (claim) => claim.claimId === partialOption.id,
+  )!;
+  await fill(page, {
+    ...complete,
+    claims: [{ ...partial, evidenceIds: partial.evidenceIds.slice(0, 1) }],
+  });
+  await expect(summary).toContainText("3/3枚");
+  const partialCard = page.locator(".claim-option").filter({
+    has: page.getByText(partialOption.label, { exact: true }),
+  });
+  await expect(partialCard).toContainText("証拠が不足しています");
+  for (const option of scenario.reportOptions.claimOptions.filter(
+    (option) => !complete.claims.some((claim) => claim.claimId === option.id),
+  )) {
+    await expect(
+      page
+        .locator(".claim-option")
+        .filter({
+          has: page.getByText(option.label, { exact: true }),
+        })
+        .locator('input[type="checkbox"]')
+        .first(),
+    ).toBeDisabled();
+  }
+  const supportingRule = getSolution().claimRules.find(
+    (rule) =>
+      remaining.some((claim) => claim.claimId === rule.claimId) &&
+      rule.allowedSupportingEvidenceIds.length > 0,
+  )!;
+  const supportingOption = scenario.reportOptions.claimOptions.find(
+    (option) => option.id === supportingRule.claimId,
+  )!;
+  const supportingCard = page.locator(".claim-option").filter({
+    has: page.getByText(supportingOption.label, { exact: true }),
+  });
+  await supportingCard
+    .locator(".check-row")
+    .filter({ hasText: supportingRule.allowedSupportingEvidenceIds[0] })
+    .locator("input")
+    .check();
+  await expect(supportingCard.locator(".check-row input:checked")).toHaveCount(
+    2,
+  );
+  await expect(supportingCard.locator(".check-row input:disabled")).toHaveCount(
+    scenario.evidence.length - 2,
+  );
+  await page.getByText("判断根拠の採点基準", { exact: true }).click();
+  await expect(page.locator(".grading-guide")).toContainText("5点");
+  await expect(page.locator(".grading-guide")).toContainText(
+    "件数を満たすだけでは得点になりません",
+  );
+  await submit(page);
+  await expect(page.locator(".score")).toHaveText("95/100");
+  const result = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)!).records[0].result,
+    key,
+  );
+  expect(
+    result.claimScores.find(
+      (claim: { claimId: string }) => claim.claimId === partialOption.id,
+    ),
+  ).toMatchObject({ points: 5, reason: "partial" });
 });

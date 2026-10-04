@@ -4,11 +4,22 @@ import {
   gradeReport,
   normalizeReport,
   validateReport,
+  validateSubmission,
 } from "../../src/game/scoring";
 import { emptyReport } from "../../src/game/reducer";
 import { correctReport } from "../helpers/report";
 const solution = getSolution();
 describe("fixed grading rubric", () => {
+  it("requires three claims only for new submissions and retains partial evidence grading", () => {
+    const report = correctReport();
+    report.claims = report.claims.slice(0, 2);
+    expect(() => validateReport(report, s, true)).not.toThrow();
+    expect(() => validateSubmission(report, s)).toThrow("3枚");
+    const partial = correctReport();
+    partial.claims[2].evidenceIds = ["E05"];
+    expect(() => validateSubmission(partial, s)).not.toThrow();
+    expect(gradeReport(partial, solution, s).scores.claims).toBe(25);
+  });
   it.each([
     ["C_DNS", ["E02"], 10],
     ["C_DNS", ["E02", "E01"], 10],

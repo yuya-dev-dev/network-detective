@@ -8,7 +8,7 @@ export const tab = (page: Page, name: string) =>
 export async function openReportGroup(page: Page, field: string) {
   const group = page.locator(`.report-group[data-report-field="${field}"]`);
   if (!(await group.evaluate((e: HTMLDetailsElement) => e.open)))
-    await group.locator("summary").click();
+    await group.locator(":scope > summary").click();
 }
 export async function start(page: Page) {
   await page.goto("/");

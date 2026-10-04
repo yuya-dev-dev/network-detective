@@ -2,7 +2,13 @@ import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { tab, openReportGroup, fill, submit } from "../tests/helpers/play";
+import {
+  tab,
+  openReportGroup,
+  fill,
+  submit,
+  readAll,
+} from "../tests/helpers/play";
 import { playableScenario, getSolution } from "../src/scenario/load";
 
 const directory = "docs/screenshots/compact";
@@ -18,6 +24,7 @@ const samples = [
   ["09-report", "報告・一覧"],
   ["10-report-detail", "報告・項目を展開"],
   ["11-result", "結果・得点部分"],
+  ["12-ground-requirements", "判断根拠・件数の案内"],
 ];
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
@@ -62,8 +69,14 @@ try {
   await capture("09-report");
   await openReportGroup(page, "scopeId");
   await capture("10-report-detail");
+  await page
+    .locator('.report-group[data-report-field="scopeId"] > summary')
+    .click();
+  await openReportGroup(page, "claims");
+  await capture("12-ground-requirements");
 
   // Use an isolated attempt; show only the score banner to avoid solution spoilers.
+  await readAll(page);
   const solution = getSolution();
   const wrong = (
     group: keyof typeof playableScenario.reportOptions,
@@ -78,7 +91,13 @@ try {
     repairId: wrong("repairOptions", solution.repairId),
     preventionId: wrong("preventionOptions", solution.preventionId),
     verificationId: wrong("verificationOptions", solution.verificationId),
-    claims: [],
+    claims: playableScenario.reportOptions.claimOptions
+      .filter(
+        (option) =>
+          !solution.claimRules.some((rule) => rule.claimId === option.id),
+      )
+      .slice(0, 3)
+      .map((option) => ({ claimId: option.id, evidenceIds: ["E08"] })),
   });
   await submit(page);
   await page
@@ -103,7 +122,7 @@ try {
     path: `${directory}/all-screens.png`,
     fullPage: true,
   });
-  console.log(`画面サンプル11枚と一覧を保存: ${directory}`);
+  console.log(`画面サンプル12枚と一覧を保存: ${directory}`);
 } finally {
   await browser.close();
 }

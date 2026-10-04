@@ -9,7 +9,7 @@ import {
 } from "react";
 import { playableScenario, getSolution } from "../scenario/load";
 import { gameReducer, newAttempt, type Action } from "../game/reducer";
-import { gradeReport, validateReport } from "../game/scoring";
+import { gradeReport, validateSubmission } from "../game/scoring";
 import { loadSave, persistSave, storageKey } from "../storage/localStorage";
 import type { GameSave, Report } from "../game/types";
 type GameContextValue = {
@@ -138,7 +138,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
   const submit = async (report: Report) => {
     if (current.current.activeAttempt?.phase !== "investigating") return;
-    const normalized = validateReport(report, playableScenario, true);
+    const normalized = validateSubmission(report, playableScenario);
     await dispatch({
       type: "SUBMIT",
       report: normalized,

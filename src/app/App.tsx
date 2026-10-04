@@ -13,6 +13,7 @@ import {
 import { Investigation, type Tab } from "../ui/Investigation";
 import { ResultView } from "../ui/ResultView";
 import { EvidenceView } from "../ui/EvidenceView";
+import { useBgm } from "../audio/useBgm";
 type View = {
   screen: "title" | "list" | "brief" | "investigation" | "result";
   tab: Tab;
@@ -49,6 +50,24 @@ function readView(): View {
 export default function App() {
   const { save, saved, notice, dispatch, begin, flush } = useGame();
   const offline = useOffline();
+  const bgm = useBgm();
+  const musicButton = (
+    <button
+      className="bgm-toggle"
+      aria-label={bgm.enabled ? "BGMをOFFにする" : "BGMをONにする"}
+      aria-pressed={bgm.enabled}
+      disabled={bgm.busy}
+      title={
+        bgm.error
+          ? "音声を再生できませんでした。もう一度タップしてください"
+          : `BGM ${bgm.enabled ? "ON" : "OFF"}`
+      }
+      onClick={() => void bgm.toggle()}
+    >
+      <span aria-hidden="true">♪</span>
+      <small>{bgm.enabled ? "ON" : "OFF"}</small>
+    </button>
+  );
   const [view, setView] = useState<View>(readView),
     [glossary, showGlossary] = useState(false),
     [hints, showHints] = useState(false);
@@ -190,6 +209,7 @@ export default function App() {
               {saved ? "保存中断可" : "保存不可"}
             </span>
             <button onClick={() => showGlossary(true)}>用語辞典</button>
+            {musicButton}
           </div>
         </header>
       )}
@@ -211,7 +231,7 @@ export default function App() {
             <div className="title-shade" />
             <div className="title-topline">
               <span>NETWORK INVESTIGATION ROOM</span>
-              <span>01</span>
+              {musicButton}
             </div>
             <div className="title-content">
               <p className="title-kicker">記録の向こうに、答えがある。</p>

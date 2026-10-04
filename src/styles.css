@@ -1237,6 +1237,63 @@ p {
 .evidence-list {
   gap: 6px;
 }
+.evidence-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.evidence-row .evidence-card {
+  flex: 1;
+  min-width: 0;
+}
+.evidence-check {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  cursor: pointer;
+}
+.evidence-check input {
+  width: 22px;
+  height: 22px;
+}
+.claim-requirement {
+  color: var(--accent);
+  font-weight: 700;
+}
+.grading-guide {
+  margin-bottom: 12px;
+}
+.grading-guide summary {
+  min-height: 44px;
+  cursor: pointer;
+  padding: 10px 0;
+}
+.bgm-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  line-height: 1;
+}
+.bgm-toggle span {
+  font-size: 20px;
+}
+.bgm-toggle small {
+  font-size: 9px;
+  margin-top: 3px;
+}
+.bgm-toggle[aria-pressed="true"] {
+  color: #72d9ec;
+  border-color: #72d9ec;
+}
+.title-topline {
+  position: relative;
+  align-items: center;
+}
 .evidence-card {
   min-height: 64px;
   padding: 8px 10px;

@@ -9,7 +9,7 @@ export function EvidenceView({
 }: {
   evidence: Evidence;
   pinned: boolean;
-  togglePin?: () => void;
+  togglePin?: (checked: boolean) => void;
   back: () => void;
   backLabel?: string;
 }) {
@@ -31,9 +31,15 @@ export function EvidenceView({
       <div className="section-heading">
         <span className="eyebrow">EVIDENCE {evidence.id}</span>
         {togglePin && (
-          <button onClick={togglePin} aria-pressed={pinned}>
-            {pinned ? "◆ ピン留め済み" : "◇ ピン留め"}
-          </button>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={pinned}
+              onChange={(event) => togglePin(event.target.checked)}
+              aria-label={`${evidence.id}を確認済みにする`}
+            />
+            <span>確認済み</span>
+          </label>
         )}
       </div>
       <h2>{evidence.title}</h2>

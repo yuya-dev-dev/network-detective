@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { PlayableScenario } from "../scenario/types";
 import type { Report } from "../game/types";
-import { validateReport } from "../game/scoring";
+import { validateSubmission } from "../game/scoring";
 import { Dialog } from "./common";
 export function ReportForm({
   scenario,
@@ -31,7 +31,7 @@ export function ReportForm({
   const candidates = scenario.evidence.filter((e) => opened.includes(e.id));
   const prepare = () => {
     try {
-      validateReport(report, scenario, true);
+      validateSubmission(report, scenario);
       setError(null);
       onReview();
       confirm(true);
@@ -53,7 +53,7 @@ export function ReportForm({
       <summary>
         <span>判断根拠</span>
         <small>
-          {report.claims.length}/3主張
+          主張3枚を選択 · {report.claims.length}/3枚
           {report.claims.some((c) => c.evidenceIds.length === 0)
             ? " · 証拠未添付"
             : ""}
@@ -64,8 +64,14 @@ export function ReportForm({
           判断根拠 <span>最大30点</span>
         </legend>
         <p className="muted">
-          主張は最大3枚。選んだ主張ごとに、閲覧した証拠を1〜2件添付します。
+          主張を3枚選び、カードに記載された件数の証拠を添付してください。補足を含め、各主張2件まで添付できます。証拠は1件以上で提出できますが、不足すると部分点または0点になります。
         </p>
+        <details className="grading-guide">
+          <summary>判断根拠の採点基準</summary>
+          <p>
+            各主張10点。正しい主張と必要な証拠がそろうと10点、支持する証拠があっても十分でない場合は5点です。誤った主張、矛盾する証拠、無関係な証拠だけの場合は0点です。件数を満たすだけでは得点になりません。
+          </p>
+        </details>
         {scenario.reportOptions.claimOptions.map((o) => {
           const claim = report.claims.find((c) => c.claimId === o.id);
           return (
@@ -93,6 +99,9 @@ export function ReportForm({
                 <span>
                   <strong>{o.label}</strong>
                   <small>{o.description}</small>
+                  <small className="claim-requirement">
+                    必要な証拠：{o.requiredEvidenceCount}件
+                  </small>
                 </span>
               </label>
               {claim && (
@@ -133,7 +142,13 @@ export function ReportForm({
                   ) : (
                     <p>証拠タブで資料を開くと添付できます。</p>
                   )}
-                  <p className="muted">添付：{claim.evidenceIds.length}/2</p>
+                  <p className="muted">
+                    必要 {o.requiredEvidenceCount}件 · 添付{" "}
+                    {claim.evidenceIds.length}件（補足を含め2件まで）
+                    {claim.evidenceIds.length < o.requiredEvidenceCount
+                      ? " · 証拠が不足しています"
+                      : ""}
+                  </p>
                 </div>
               )}
             </div>

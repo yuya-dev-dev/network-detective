@@ -33,7 +33,7 @@ export type Action =
   | { type: "NEW"; attempt: Attempt }
   | { type: "START" }
   | { type: "OPEN"; evidenceId: string }
-  | { type: "PIN"; evidenceId: string }
+  | { type: "PIN"; evidenceId: string; checked?: boolean }
   | {
       type: "HYPOTHESIS";
       hypothesisId: string;
@@ -72,9 +72,10 @@ export function gameReducer(save: GameSave, action: Action): GameSave {
     case "PIN":
       next = {
         ...a,
-        pinnedEvidenceIds: a.pinnedEvidenceIds.includes(action.evidenceId)
-          ? a.pinnedEvidenceIds.filter((id) => id !== action.evidenceId)
-          : [...a.pinnedEvidenceIds, action.evidenceId],
+        pinnedEvidenceIds:
+          (action.checked ?? !a.pinnedEvidenceIds.includes(action.evidenceId))
+            ? [...new Set([...a.pinnedEvidenceIds, action.evidenceId])]
+            : a.pinnedEvidenceIds.filter((id) => id !== action.evidenceId),
       };
       break;
     case "HYPOTHESIS":

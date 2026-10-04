@@ -28,6 +28,8 @@ it.each([
   "oversize",
   "feedback",
   "time",
+  "evidenceCount",
+  "evidenceCountMismatch",
 ])("rejects %s data errors before a build", (kind) => {
   const invalid: any = structuredClone(data);
   if (kind === "missing") delete invalid.context;
@@ -44,5 +46,11 @@ it.each([
     ];
   if (kind === "feedback") delete invalid.solution.optionFeedback.C_DNS;
   if (kind === "time") invalid.context.snapshotTime = "tomorrow";
+  if (kind === "evidenceCount")
+    delete invalid.reportOptions.claimOptions[0].requiredEvidenceCount;
+  if (kind === "evidenceCountMismatch")
+    invalid.reportOptions.claimOptions.find(
+      (o: any) => o.id === "C_MISMATCH",
+    ).requiredEvidenceCount = 1;
   expect(() => assertScenario(invalid)).toThrow();
 });

@@ -356,31 +356,37 @@
     "claimOptions": [
       {
         "id": "C_PING",
+        "requiredEvidenceCount": 1,
         "label": "GWへのpingだけでWebの正常性が分かる",
         "description": "GWへのping成功だけで、申請Webも正常と判断できる。"
       },
       {
         "id": "C_DNS",
+        "requiredEvidenceCount": 1,
         "label": "両PCは今回の宛先を正しく名前解決している",
         "description": "両PCのDNS応答が、管理中の正規の宛先IPと一致する。"
       },
       {
         "id": "C_BACKUP",
+        "requiredEvidenceCount": 1,
         "label": "容量警告が申請Webを停止させた",
         "description": "バックアップ機器の容量警告が、今回の申請Web停止を引き起こした。"
       },
       {
         "id": "C_MISMATCH",
+        "requiredEvidenceCount": 2,
         "label": "営業の送信元範囲が許可条件に含まれない",
         "description": "現在の営業の送信元ネットワークが、営業用FW許可条件の範囲に含まれない。"
       },
       {
         "id": "C_OPS",
+        "requiredEvidenceCount": 1,
         "label": "運用の正常応答から営業の正常性も分かる",
         "description": "運用PCの正常応答だけで、営業PCからの通信も正常と判断できる。"
       },
       {
         "id": "C_DROP",
+        "requiredEvidenceCount": 1,
         "label": "営業のTCP/443は最終DROPで遮断される",
         "description": "営業の申請Web向けTCP/443が、FWの最終DROPルールで遮断されている。"
       }

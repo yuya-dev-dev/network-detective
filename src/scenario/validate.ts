@@ -134,6 +134,11 @@ export function assertScenario(value: unknown): asserts value is Scenario {
     if (groupIds[key].length < 3) throw new Error(`${key}: 3候補以上が必要`);
   }
   const allOptionIds = Object.values(groupIds).flat();
+  const claims = array(ro.claimOptions, "claimOptions").map((v) =>
+    object(v, "claimOption"),
+  );
+  for (const claim of claims)
+    integer(claim.requiredEvidenceCount, "requiredEvidenceCount", 1, 2);
   unique(allOptionIds, "reportOptions");
   if (
     groupIds.causeOptions.length !== hypothesisIds.length ||
@@ -168,6 +173,14 @@ export function assertScenario(value: unknown): asserts value is Scenario {
     );
     if (!sets.length || sets.some((set) => set.length < 1 || set.length > 2))
       throw new Error("成立条件は1〜2証拠の空でない候補集合にしてください");
+    if (
+      sets.some(
+        (set) =>
+          set.length !==
+          claims.find((c) => c.id === r.claimId)?.requiredEvidenceCount,
+      )
+    )
+      throw new Error("主張の必要証拠数と成立条件が一致しません");
     const support = refs(
       r.allowedSupportingEvidenceIds,
       evidenceIds,

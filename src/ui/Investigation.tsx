@@ -60,7 +60,9 @@ export function Investigation({
           <EvidenceView
             evidence={detail}
             pinned={attempt.pinnedEvidenceIds.includes(detail.id)}
-            togglePin={() => dispatch({ type: "PIN", evidenceId: detail.id })}
+            togglePin={(checked) =>
+              dispatch({ type: "PIN", evidenceId: detail.id, checked })
+            }
             back={back}
           />
         )}
@@ -82,7 +84,7 @@ export function Investigation({
               すべて（8）
             </button>
             <button aria-pressed={pinnedOnly} onClick={() => filter(true)}>
-              ピン留め（{attempt.pinnedEvidenceIds.length}）
+              確認済み（{attempt.pinnedEvidenceIds.length}）
             </button>
           </div>
           <div className="evidence-list">
@@ -91,35 +93,54 @@ export function Investigation({
                 (e) => !pinnedOnly || attempt.pinnedEvidenceIds.includes(e.id),
               )
               .map((e) => (
-                <button
-                  key={e.id}
-                  className="evidence-card"
-                  data-evidence-id={e.id}
-                  onClick={() => open(e.id)}
-                >
-                  <span className="file-number">{e.id}</span>
-                  <span>
-                    <span className="file-kind">
-                      {e.acquisition === "diagnostic"
-                        ? "固定診断"
-                        : e.kind === "report"
-                          ? "報告・資料"
-                          : "記録・資料"}
-                      {attempt.pinnedEvidenceIds.includes(e.id)
-                        ? " · ◆ ピン留め"
-                        : ""}
-                      {attempt.openedEvidenceIds.includes(e.id)
-                        ? " · 閲覧済み"
-                        : ""}
+                <div className="evidence-row" key={e.id}>
+                  <label
+                    className="evidence-check"
+                    title="自分で確認済みを記録"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={attempt.pinnedEvidenceIds.includes(e.id)}
+                      aria-label={`${e.id}を確認済みにする`}
+                      onChange={(event) =>
+                        dispatch({
+                          type: "PIN",
+                          evidenceId: e.id,
+                          checked: event.target.checked,
+                        })
+                      }
+                    />
+                  </label>
+                  <button
+                    key={e.id}
+                    className="evidence-card"
+                    data-evidence-id={e.id}
+                    onClick={() => open(e.id)}
+                  >
+                    <span className="file-number">{e.id}</span>
+                    <span>
+                      <span className="file-kind">
+                        {e.acquisition === "diagnostic"
+                          ? "固定診断"
+                          : e.kind === "report"
+                            ? "報告・資料"
+                            : "記録・資料"}
+                        {attempt.pinnedEvidenceIds.includes(e.id)
+                          ? " · 確認済み"
+                          : ""}
+                        {attempt.openedEvidenceIds.includes(e.id)
+                          ? " · 閲覧済み"
+                          : ""}
+                      </span>
+                      <strong>{e.title}</strong>
                     </span>
-                    <strong>{e.title}</strong>
-                  </span>
-                  <span className="chevron">›</span>
-                </button>
+                    <span className="chevron">›</span>
+                  </button>
+                </div>
               ))}
           </div>
           {pinnedOnly && attempt.pinnedEvidenceIds.length === 0 && (
-            <p>証拠の詳細でピン留めすると、ここに並びます。</p>
+            <p>証拠の横のチェック欄で、確認済みの資料を記録できます。</p>
           )}
         </section>
       </div>

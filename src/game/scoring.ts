@@ -55,6 +55,12 @@ export function validateReport(
   }
   return r;
 }
+export function validateSubmission(report: Report, scenario: PlayableScenario) {
+  const normalized = validateReport(report, scenario, true);
+  if (normalized.claims.length !== 3)
+    throw new Error("判断根拠の主張を3枚選んでください");
+  return normalized;
+}
 export function gradeReport(
   report: Report,
   solution: Solution,

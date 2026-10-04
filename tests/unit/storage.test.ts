@@ -11,6 +11,27 @@ import { playableScenario as s, getSolution } from "../../src/scenario/load";
 import { gradeReport } from "../../src/game/scoring";
 import { correctReport } from "../helpers/report";
 const solution = getSolution();
+it.each([0, 1, 2])(
+  "retains legacy submitted records and drafts with %i claims",
+  (count) => {
+    const report = correctReport();
+    report.claims = report.claims.slice(0, count);
+    const draft = gameReducer(draftSave(), { type: "DRAFT", report });
+    expect(
+      parseSave(draft, s, solution).save.activeAttempt!.reportDraft.claims,
+    ).toHaveLength(count);
+    const submitted = gameReducer(draft, {
+      type: "SUBMIT",
+      report,
+      result: gradeReport(report, solution, s),
+    });
+    const loaded = parseSave(submitted, s, solution);
+    expect(loaded.warning).toBeNull();
+    expect(loaded.save.records).toHaveLength(1);
+    expect(loaded.save.records[0].submittedReport.claims).toHaveLength(count);
+    expect(loaded.save.activeAttempt!.result!.total).toBe(70 + count * 10);
+  },
+);
 function memory() {
   const data = new Map<string, string>();
   return {

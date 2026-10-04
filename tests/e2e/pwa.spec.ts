@@ -46,6 +46,21 @@ test("cached application and case play completely offline under a subdirectory",
         .locator(".title-background")
         .evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0),
     ).toBe(true);
+    if (await page.evaluate(() => typeof AudioContext === "function")) {
+      await page.getByRole("button", { name: "BGMをONにする" }).click();
+      await expect(
+        page.getByRole("button", { name: "BGMをOFFにする" }),
+      ).toHaveAttribute("aria-pressed", "true");
+    } else {
+      // Windows WebKit lacks AudioContext. Verify cached bytes without claiming playback.
+      expect(
+        await page.evaluate(
+          async () =>
+            (await (await fetch("audio/investigation.mp3")).arrayBuffer())
+              .byteLength,
+        ),
+      ).toBeGreaterThan(400_000);
+    }
     await page
       .getByRole("button", { name: "捜査を始める", exact: true })
       .click();

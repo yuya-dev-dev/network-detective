@@ -1,4 +1,5 @@
 export type Option = { id: string; label: string; description: string };
+export type ClaimOption = Option & { requiredEvidenceCount: 1 | 2 };
 export type Explanation = { text: string; evidenceIds: string[] };
 export type Block =
   | { type: "text"; body: string }
@@ -53,7 +54,7 @@ export type Scenario = {
   reportOptions: {
     scopeOptions: Option[];
     causeOptions: Option[];
-    claimOptions: Option[];
+    claimOptions: ClaimOption[];
     repairOptions: Option[];
     preventionOptions: Option[];
     verificationOptions: Option[];
