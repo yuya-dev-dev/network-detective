@@ -1,0 +1,951 @@
+{
+  "schemaVersion": 1,
+  "id": "case06",
+  "revision": 1,
+  "title": "バックアップは成功しました",
+  "type": "security",
+  "difficulty": 3,
+  "estimatedMinutes": 23,
+  "prerequisites": [
+    "共有権限・バックアップ世代・ログ相関の概要（用語辞典で確認できます）"
+  ],
+  "brief": "展示で使う音声の編集端末で感染動作が確認され、現在の素材が開けなくなりました。保管担当の画面にはバックアップ成功の表示がありますが、旧世代の復元試験も失敗しています。聞き取りやすい間を整えていた編集担当は、どこまで戻せるか分からず再開できません。今回調べるのは侵入経路ではなく、保護すべき旧世代まで使えなくなった理由と、安全な復旧計画です。正常時は、編集者が現在素材を扱えても、旧世代を書き換えたり削除したりできない必要があります。端末・共有・世代の記録から、使える復元元と時点、戻らない更新を明示してください。記録と現存世代を残し、クリーンな環境で再開する手順をお願いします。",
+  "context": {
+    "baseline": [
+      "編集者は現在素材を扱えても、保持世代へ上書き・削除できない。専用svc_backupは新世代を作成する。クリーンな環境で復元時点を明示し再開する。"
+    ],
+    "assumptions": [
+      "編集端末ED1 10.69.1.23 / 主体U21（所属・共有認証はE09）\n共有NAS 10.69.20.18\nクリーン復元端末RC1 10.69.30.21\n/live：現在素材、編集可\n/versions：保持世代、Editorsの上書き・削除不可\nsvc_backup：別の専用主体、新世代の作成担当",
+      "現在の保持世代保護は有効ACLによる設計で、独立したWORM・変更不能機構は未導入。提示する権限は共有・保持を合成した実効値で、隠れたdeny、別共有ACL、管理者特権はない。共有認証はU21、svc_backupの秘密は編集端末に置かない。一般のWindows継承そのものの再現とは称さない。",
+      "全12資料は最初から公開・任意順。2026-10-01/JST、時計誤差100ms以内、08:30固定。感染動作は調査の出発点で、侵入経路の回答は求めない。"
+    ],
+    "snapshotTime": "2026-10-01T08:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_ED1",
+        "label": "編集端末ED1",
+        "kind": "client",
+        "addresses": [
+          "10.69.1.23",
+          "主体U21（所属・共有認証はE09）"
+        ]
+      },
+      {
+        "id": "N_NAS",
+        "label": "共有NAS",
+        "kind": "storage",
+        "addresses": [
+          "10.69.20.18",
+          "/live · /versions"
+        ]
+      },
+      {
+        "id": "N_RC1",
+        "label": "クリーン復元端末RC1",
+        "kind": "client",
+        "addresses": [
+          "10.69.30.21"
+        ]
+      },
+      {
+        "id": "N_V07",
+        "label": "別保管V07",
+        "kind": "storage",
+        "addresses": [
+          "前日18:00の保存時点",
+          "以後の接続履歴なし"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_ED1_NAS",
+        "from": "N_ED1",
+        "to": "N_NAS",
+        "label": "編集端末 ↔ NAS（SMB/TCP445）"
+      },
+      {
+        "id": "L_RC1_NAS",
+        "from": "N_RC1",
+        "to": "N_NAS",
+        "label": "RC1 ↔ NAS（試験用コピー・対照再生）"
+      },
+      {
+        "id": "L_V07_RC1",
+        "from": "N_V07",
+        "to": "N_RC1",
+        "label": "別保管V07 → RC1（試験復元の関係・常時通信ではない）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "編集席と復元試験の報告",
+      "kind": "report",
+      "nodeIds": [
+        "N_ED1",
+        "N_NAS",
+        "N_RC1"
+      ],
+      "observedAt": "2026-10-01T08:20:00+09:00",
+      "observedAtLabel": "資料・08:20",
+      "source": "編集席・原本を変更しない試験用コピーの報告",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "素材F1/F2が開けない。保持世代V08と最新世代V09からの試験用コピーでも形式検証失敗。原本や保管世代は変更せず、試験用コピーだけで確認している。使えないという症状をまとめた報告で、操作主体や権限の原因はこの資料に含まない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "バックアップジョブB09",
+      "kind": "log",
+      "nodeIds": [
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T08:15:00+09:00",
+      "observedAtLabel": "資料・08:15〜18",
+      "source": "NASのバックアップジョブB09",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "job B09 / source /live → destination V09",
+              "status COPY_OK",
+              "対象F1/F2：読出し2件・保存2件完了"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "成功判定はコピー処理の完了。素材の形式検証、旧世代の健全性、復元試験はこの判定に含まない。時刻はコピー開始08:15、完了08:18。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "共有の有効権限",
+      "kind": "config",
+      "nodeIds": [
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T08:22:00+09:00",
+      "observedAtLabel": "資料・NAS／08:22",
+      "source": "NASの共有・保持を合成した有効権限",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "この変更・作成権限の全有効情報の対象：/live/F1,F2 と /versions/V08/F1,F2",
+              "/live/F1,F2をModifyできる主体：Editorsのみ",
+              "/live/F1,F2：svc_backup Read",
+              "/versions：Editors Modify / inherited=true",
+              "/versions（新世代作成操作）：svc_backup CreateVersion",
+              "Modifyの範囲：上書き・削除を含む"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "調査対象F1/F2に適用する共有・保持ACLを合成した変更・作成権限の全有効情報。正常な読取と試験復元の許可は維持し、B09はsvc_backupのReadで現在素材を読み出す。/live/demoはこの範囲外。別deny、隠れた共有権限、管理者特権なし。保持保護の独立WORMは未導入。新世代作成と既存V08の上書きは別の操作。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "保持要件と08:00の変更",
+      "kind": "report",
+      "nodeIds": [
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T08:00:00+09:00",
+      "observedAtLabel": "資料",
+      "source": "保持承認要件と08:00変更記録",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "承認要件ではEditorsは/versionsへ書込み・削除不可。専用svc_backupが新世代を作り、保持世代を保護する。08:00に親フォルダの継承を有効化した。変更前の/versionsのEditorsはnone。保持要件は変更していない。現行の保護手段は有効ACLであり、独立した変更不能機構の稼働記録はない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "編集端末のEDRと接続所有記録",
+      "kind": "log",
+      "nodeIds": [
+        "N_ED1",
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T08:10:00+09:00",
+      "observedAtLabel": "資料・08:10:00〜06",
+      "source": "編集端末ED1のEDRと接続所有追跡",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "ED1 / process instance P771 / pid771 / start08:09:58",
+              "actor U21 / 未承認プログラム",
+              "感染動作を確認",
+              "専用NAS接続CN77 / 10.69.1.23:52001 → 10.69.20.18:445",
+              "NAS session SM31 / 所有追跡08:10:00〜06：P771のみ",
+              "/live/F1 WRITE_OVERWRITE success",
+              "/live/F2 WRITE_OVERWRITE success"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "08:10:00〜03の/live上書き2件と、接続の所有追跡を収録。この架空NASクライアントはプロセス専用接続を使い、委譲・他プロセス共有・多重チャネルなし。全区間の観測所有者はP771のみ。一般のSMBセッション一致だけでPIDを特定する仕様ではない。旧世代のパスや操作成功はこの資料には載せない。実行ファイル、指示文字列、侵入経路も載せない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "NASの旧世代操作監査",
+      "kind": "log",
+      "nodeIds": [
+        "N_NAS",
+        "N_ED1"
+      ],
+      "observedAt": "2026-10-01T08:10:04+09:00",
+      "observedAtLabel": "資料・08:10:04〜06",
+      "source": "NASの保持世代操作監査",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "connection CN77 / 10.69.1.23:52001 → 10.69.20.18:445",
+              "session SM31 / client ED1 / actor U21",
+              "M503 /versions/V08/F1 WRITE_OVERWRITE success",
+              "M504 /versions/V08/F2 WRITE_OVERWRITE success",
+              "同時刻のsvc_backup操作：なし",
+              "後のjob B09：別connection CN90 / session SM90 / actor svc_backup"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "保持世代2件の操作記録。NASはクライアントPIDを記録しない。共有で観測した主体、接続と4tuple、セッション、操作IDを表示する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "調査素材の世代・形式・指紋",
+      "kind": "test",
+      "nodeIds": [
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T08:23:00+09:00",
+      "observedAtLabel": "診断・08:23",
+      "source": "調査素材の世代・形式・指紋診断",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "保全値（V08が上書きされる前）：F1 H1 / F2 H2",
+              "現在/live：F1 HX1 / F2 HX2 / 形式不正",
+              "現在V08：F1 HX1 / F2 HX2 / 形式不正",
+              "現在V09：F1 HX1 / F2 HX2 / 形式不正"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "調査対象F1/F2の全一覧。HXは暗号化結果の指紋として記録した値。元の素材内容は公開しない。指紋の一致は内容比較に使う。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "別保管V07の試験復元",
+      "kind": "test",
+      "nodeIds": [
+        "N_V07",
+        "N_RC1"
+      ],
+      "observedAt": "2026-10-01T08:25:00+09:00",
+      "observedAtLabel": "診断・08:25",
+      "source": "別保管V07・クリーンRC1の試験復元",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "V07の保存時点は前日18:00。以後、接続履歴のない別保管からクリーンRC1へ試験復元した。F1 H1old、F2 H2old、形式正常、実再生成功。V07より後の改訂は含まない。この資料はV07の復元試験であり、現在のNASディスク検査ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "主体と共有認証の台帳",
+      "kind": "report",
+      "nodeIds": [
+        "N_ED1",
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T08:22:00+09:00",
+      "observedAtLabel": "資料・08:22",
+      "source": "主体所属と共有認証の完全台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "U21はEditors所属。SM31はU21で認証した共有セッション。svc_backupは別の専用主体で、SM90に対応。編集端末に専用資格情報はない。対象期間の所属・共有認証記録は有効で完全。秘密の認証値は示さない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "監視と収録範囲",
+      "kind": "report",
+      "nodeIds": [
+        "N_ED1",
+        "N_NAS",
+        "N_RC1"
+      ],
+      "observedAt": "2026-10-01T08:00:00+09:00",
+      "observedAtLabel": "資料・08:00〜30",
+      "source": "EDR/NAS監視とRC1の対照再生",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "指定パス・主体のEDRとNAS操作ログは全成功・失敗を収録、欠落0。SMB到達正常、NASディスク正常、空き40%。RC1から健全な対照ファイルを再生成功。監視対象以外の全社侵害や外部漏えいはこの記録で判定しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "title": "別館の容量台帳",
+      "kind": "report",
+      "nodeIds": [],
+      "observedAt": "2026-09-30T00:00:00+09:00",
+      "observedAtLabel": "資料・前日",
+      "source": "別館の別NAS容量台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "別館の別NASに容量警告があり、前日に解消。台帳上、F1/F2の保存先・依存先ではない。今回の08:00〜30の監視対象とは別の設備。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "title": "正規変換の予定と終了記録",
+      "kind": "report",
+      "nodeIds": [
+        "N_NAS"
+      ],
+      "observedAt": "2026-10-01T07:00:00+09:00",
+      "observedAtLabel": "資料・07:00",
+      "source": "正規変換の予定・終了記録",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "承認された変換処理はpid410、actor svc_convert、対象/live/demoのみ。すでに終了済み。V08への操作権限なし。感染記録とは別のプロセス・主体の記録として保全した。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_B1",
+      "label": "バックアップ未実行",
+      "description": "バックアップが実行されず、復元に使う保存データが作られていない"
+    },
+    {
+      "id": "H_OK",
+      "label": "保持世代へのEditors権限継承",
+      "description": "EditorsのModifyを継承し、保護すべき旧世代にも上書き権限を与えた"
+    },
+    {
+      "id": "H_B2",
+      "label": "NAS全ディスク故障",
+      "description": "NASの全ディスクが故障し、現在素材と世代を正常に読み出せない"
+    },
+    {
+      "id": "H_B3",
+      "label": "専用主体だけによる書込み",
+      "description": "専用svc_backupによる書込みのみが、旧世代の変更を起こした"
+    },
+    {
+      "id": "H_B4",
+      "label": "復元端末だけの不調",
+      "description": "復元端末のみが不調で、保管世代は正常なのに再生できていない"
+    },
+    {
+      "id": "H_B5",
+      "label": "正規変換バッチによる旧世代変更",
+      "description": "正規の素材変換バッチが旧世代にも処理を行い、形式を変えた"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_OK",
+        "label": "F1/F2・保持世代とV07復元時点",
+        "description": "F1/F2とV08/V09は使用不能。V07復元可、鮮度は前日18:00"
+      },
+      {
+        "id": "S_B1",
+        "label": "最新編集まで欠けず全回復",
+        "description": "最新データも全回復できると判断し、現在までの編集を欠けず再開できる範囲とする"
+      },
+      {
+        "id": "S_B2",
+        "label": "別保管を含む全世代喪失",
+        "description": "素材と旧世代の不調から、別保管を含むすべての世代が失われたと判断する"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_B1",
+        "label": "バックアップ未実行",
+        "description": "バックアップが実行されず、復元に使う保存データが作られていない"
+      },
+      {
+        "id": "H_OK",
+        "label": "保持世代へのEditors権限継承",
+        "description": "EditorsのModifyを継承し、保護すべき旧世代にも上書き権限を与えた"
+      },
+      {
+        "id": "H_B2",
+        "label": "NAS全ディスク故障",
+        "description": "NASの全ディスクが故障し、現在素材と世代を正常に読み出せない"
+      },
+      {
+        "id": "H_B3",
+        "label": "専用主体だけによる書込み",
+        "description": "専用svc_backupによる書込みのみが、旧世代の変更を起こした"
+      },
+      {
+        "id": "H_B4",
+        "label": "復元端末だけの不調",
+        "description": "復元端末のみが不調で、保管世代は正常なのに再生できていない"
+      },
+      {
+        "id": "H_B5",
+        "label": "正規変換バッチによる旧世代変更",
+        "description": "正規の素材変換バッチが旧世代にも処理を行い、形式を変えた"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "K2",
+        "label": "旧世代にアクセスできるのはsvc_backupだけで、U21は操作できない",
+        "description": "旧世代にアクセスできるのはsvc_backupだけで、U21は操作できない",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C2",
+        "label": "有効ACLと主体記録からU21へ旧世代上書き権限が付与される",
+        "description": "有効ACLと主体記録からU21へ旧世代上書き権限が付与される",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "K1",
+        "label": "コピー処理に成功したので、保持したすべての世代を復元して使える",
+        "description": "コピー処理に成功したので、保持したすべての世代を復元して使える",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C3",
+        "label": "ED1の未承認プロセスに対応する共有セッションがV08を上書きした",
+        "description": "ED1の未承認プロセスに対応する共有セッションがV08を上書きした",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "K3",
+        "label": "V07の復元に成功したので、その後の最新編集も含めてすべて戻せる",
+        "description": "V07の復元に成功したので、その後の最新編集も含めてすべて戻せる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C1",
+        "label": "今回の成功通知はコピー完了で旧世代健全性を保証しない",
+        "description": "今回の成功通知はコピー完了で旧世代健全性を保証しない",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "A_B1",
+        "label": "形式未検証の最新V09へ復元",
+        "description": "記録を保全して危険な書込みを止め、COPY_OKのV09を稼働先へ戻す。元の形式と再生は検証せず、最新世代を選ぶことを再開の条件にする"
+      },
+      {
+        "id": "A_OK",
+        "label": "隔離・保全・ACL復旧とクリーン復元",
+        "description": "ED1隔離と記録保全、危険な共有書込み停止、保持ACL復旧。健全性確認済みV07をクリーン環境へ復元し、欠けた更新分を明示して再開"
+      },
+      {
+        "id": "A_B2",
+        "label": "別保管を含む現存世代を全削除",
+        "description": "不正データを残さないため別保管を含む現存世代を全削除する。健全な世代や指紋の保全は行わず、保管を空にして業務を作り直す"
+      },
+      {
+        "id": "A_B3",
+        "label": "感染ED1へ戻して編集を継続",
+        "description": "世代の試験と記録保全を行い、使える素材を元の感染ED1へ戻す。隔離やクリーン環境への移行は行わず、同じ端末で編集を続ける"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_B1",
+        "label": "編集とバックアップ資格情報を集約",
+        "description": "編集とバックアップの資格情報を一つへ集約する。担当交代を簡単にし、両方の操作を同じ主体で行える運用にする"
+      },
+      {
+        "id": "P_OK",
+        "label": "主体分離・変更不能保護・復元試験",
+        "description": "編集とバックアップ主体を分離。将来対策として変更不能保護を導入し、別保管・有効権限確認・復元試験を継続"
+      },
+      {
+        "id": "P_B2",
+        "label": "容量を保管の正常基準にする",
+        "description": "NAS容量を継続監視し、空き容量を保管の正常判定にする。世代の有効権限と実復元の試験は定期確認に含めない"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_B1",
+        "label": "ジョブ成功とコピー件数だけ",
+        "description": "ジョブの成功表示とコピー対象件数を確認する。緑表示を復旧完了とし、形式・再生・旧世代拒否・感染端末拒否・復元時点は確認しない"
+      },
+      {
+        "id": "V_B2",
+        "label": "編集端末のpingだけ",
+        "description": "編集端末からNASへのpingを確認する。到達できれば素材も回復とし、実復元・再生・世代保護・復元時点は確認項目に含めない"
+      },
+      {
+        "id": "V_OK",
+        "label": "クリーン復元・実再生・拒否・時点",
+        "description": "クリーン環境で復元・実再生・ハッシュ照合。編集主体の旧世代上書き拒否、専用主体の新世代作成、感染端末の再アクセス拒否、復元時点を確認"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "T1",
+      "level": 1,
+      "text": "成功通知が何を判定しているか確認する。",
+      "evidenceIds": [
+        "E02"
+      ]
+    },
+    {
+      "id": "T2",
+      "level": 2,
+      "text": "保持世代と書込み主体、有効権限を対応させる。",
+      "evidenceIds": [
+        "E03",
+        "E04",
+        "E09"
+      ]
+    },
+    {
+      "id": "T3",
+      "level": 3,
+      "text": "EDRの専用接続所有とNASの同接続・操作を結んで読む。",
+      "evidenceIds": [
+        "E05",
+        "E06"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "有効ACL",
+      "definition": "複数のアクセス制御条件を適用した結果の権限。"
+    },
+    {
+      "term": "継承",
+      "definition": "親の権限設定等を子へ受け継ぐこと。"
+    },
+    {
+      "term": "主体",
+      "definition": "権限判断に使う利用者等の識別単位。"
+    },
+    {
+      "term": "世代",
+      "definition": "ある時点で保存した状態。"
+    },
+    {
+      "term": "復元",
+      "definition": "保存した状態を使える場所へ戻すこと。"
+    },
+    {
+      "term": "ハッシュ",
+      "definition": "内容を照合するための指紋となる値。"
+    },
+    {
+      "term": "隔離",
+      "definition": "他の対象への接続や操作を制限すること。"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_OK",
+    "causeId": "H_OK",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E01"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E03",
+            "E09"
+          ],
+          [
+            "E03",
+            "E06"
+          ],
+          [
+            "E03",
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E05",
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E07"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "A_OK",
+    "preventionId": "P_OK",
+    "verificationId": "V_OK",
+    "criticalOptionIds": [
+      "A_B2",
+      "A_B3"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：F1/F2が開かず、V08とV09の試験も形式不正でした（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "確認できた事実：成功通知はコピー処理の完了で、素材の形式や旧世代の健全性を検証する判定ではありません（E02）。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      {
+        "text": "残る原因：NASのディスク・容量・対照ファイル再生は正常で、正規変換も別の主体・対象・時刻です（E10/E12）。",
+        "evidenceIds": [
+          "E10",
+          "E12"
+        ]
+      },
+      {
+        "text": "設定との不一致：現在の有効ACLはEditorsに旧世代のModifyを与えています（E03）。08:00の継承変更は、Editorsに保持世代を書き換えさせない承認要件と一致しません（E04）。U21の未承認P771だけが所有する専用CN77を、NASの同接続・4tuple・操作M503/M504へ照合すると、V08の2素材上書きへ対応します（E05/E06/E09）。さらに上書き後の/liveからB09がコピーしたため、V09も同じ不正な指紋です（E02/E07）。旧世代を守れなかった理由は、この権限付与です。",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E09",
+          "E02",
+          "E07"
+        ]
+      },
+      {
+        "text": "対策：端末の隔離、ログと現存世代の保全、危険な共有書込みの停止、保持ACLの復旧を先に行います。健全性を試験済みの別保管V07をクリーン環境へ戻し、前日18:00以降の更新を含まないことを明示して再開します（E08）。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      {
+        "text": "確認：復元と実再生・ハッシュ、編集主体の旧世代拒否、専用主体の新世代作成、感染端末の再接続拒否を確認します。これらは今後の確認計画で、最新まで回復済みという意味ではありません。\n\n未確定：感染経路、物理的操作者、全社侵害、外部漏えい、最新編集の完全回復。V07の復元成功からV07後の更新を取り戻したとは書かない。",
+        "evidenceIds": []
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_B1": {
+        "text": "B09は2件を読出し・保存している（E02）。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "H_OK": {
+        "text": "設定との不一致：現在の有効ACLはEditorsに旧世代のModifyを与えています（E03）。08:00の継承変更は、Editorsに保持世代を書き換えさせない承認要件と一致しません（E04）。U21の未承認P771だけが所有する専用CN77を、NASの同接続・4tuple・操作M503/M504へ照合すると、V08の2素材上書きへ対応します（E05/E06/E09）。さらに上書き後の/liveからB09がコピーしたため、V09も同じ不正な指紋です（E02/E07）。旧世代を守れなかった理由は、この権限付与です。",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E09",
+          "E02",
+          "E07"
+        ]
+      },
+      "H_B2": {
+        "text": "ディスクと対照再生が正常（E10）。",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "H_B3": {
+        "text": "旧世代操作はU21/SM31で、svc_backupは別主体・別セッション（E06/E09）。",
+        "evidenceIds": [
+          "E06",
+          "E09"
+        ]
+      },
+      "H_B4": {
+        "text": "RC1はV07と健全な対照を再生できる（E08/E10）。",
+        "evidenceIds": [
+          "E08",
+          "E10"
+        ]
+      },
+      "H_B5": {
+        "text": "pid410はdemo対象で終了済み、V08権限もない（E12）。",
+        "evidenceIds": [
+          "E12"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_B1": {
+        "text": "V07の復元は前日18:00までで、後の改訂を含まない（E08）。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "K3": {
+        "text": "V07の復元は前日18:00までで、後の改訂を含まない（E08）。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "S_B2": {
+        "text": "別保管V07の形式・再生は正常（E08）。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "H_B1": {
+        "text": "B09は2件を読出し・保存している（E02）。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "H_B2": {
+        "text": "ディスクと対照再生が正常（E10）。",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "H_B3": {
+        "text": "旧世代操作はU21/SM31で、svc_backupは別主体・別セッション（E06/E09）。",
+        "evidenceIds": [
+          "E06",
+          "E09"
+        ]
+      },
+      "H_B4": {
+        "text": "RC1はV07と健全な対照を再生できる（E08/E10）。",
+        "evidenceIds": [
+          "E08",
+          "E10"
+        ]
+      },
+      "H_B5": {
+        "text": "pid410はdemo対象で終了済み、V08権限もない（E12）。",
+        "evidenceIds": [
+          "E12"
+        ]
+      },
+      "K1": {
+        "text": "成功判定に形式・旧世代健全性・復元試験は含まれない（E02）。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "K2": {
+        "text": "U21に有効権限があり実操作も成功（E03/E06/E09）。",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E09"
+        ]
+      },
+      "A_B1": {
+        "text": "V09は形式不正で、未検証の復元では業務を戻せない（E07）。",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "A_B2": {
+        "text": "健全なV07も証拠も失う危険操作（E07/E08）。",
+        "evidenceIds": [
+          "E07",
+          "E08"
+        ]
+      },
+      "A_B3": {
+        "text": "感染動作があるED1で続ければ、保護と安全な再開の条件を守れない危険操作（E05/E06）。",
+        "evidenceIds": [
+          "E05",
+          "E06"
+        ]
+      },
+      "P_B1": {
+        "text": "編集主体と専用主体の分離を失う（E03/E09）。",
+        "evidenceIds": [
+          "E03",
+          "E09"
+        ]
+      },
+      "P_B2": {
+        "text": "容量は正常でも権限と復元の問題が残る（E03/E10）。",
+        "evidenceIds": [
+          "E03",
+          "E10"
+        ]
+      },
+      "V_B1": {
+        "text": "コピーの緑表示は復元可能性を判定しない（E02）。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "V_B2": {
+        "text": "到達性では形式・再生・世代保護や復元時点を確認できない（E07/E08/E10）。",
+        "evidenceIds": [
+          "E07",
+          "E08",
+          "E10"
+        ]
+      },
+      "S_OK": {
+        "text": "症状：F1/F2が開かず、V08とV09の試験も形式不正でした（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "H_OK": {
+        "text": "設定との不一致：現在の有効ACLはEditorsに旧世代のModifyを与えています（E03）。08:00の継承変更は、Editorsに保持世代を書き換えさせない承認要件と一致しません（E04）。U21の未承認P771だけが所有する専用CN77を、NASの同接続・4tuple・操作M503/M504へ照合すると、V08の2素材上書きへ対応します（E05/E06/E09）。さらに上書き後の/liveからB09がコピーしたため、V09も同じ不正な指紋です（E02/E07）。旧世代を守れなかった理由は、この権限付与です。",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E09",
+          "E02",
+          "E07"
+        ]
+      },
+      "A_OK": {
+        "text": "対策：端末の隔離、ログと現存世代の保全、危険な共有書込みの停止、保持ACLの復旧を先に行います。健全性を試験済みの別保管V07をクリーン環境へ戻し、前日18:00以降の更新を含まないことを明示して再開します（E08）。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "P_OK": {
+        "text": "編集とバックアップ主体を分離。将来対策として変更不能保護を導入し、別保管・有効権限確認・復元試験を継続。",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E08",
+          "E09"
+        ]
+      },
+      "V_OK": {
+        "text": "確認：復元と実再生・ハッシュ、編集主体の旧世代拒否、専用主体の新世代作成、感染端末の再接続拒否を確認します。これらは今後の確認計画で、最新まで回復済みという意味ではありません。",
+        "evidenceIds": []
+      },
+      "C1": {
+        "text": "今回の成功通知はコピー完了で旧世代健全性を保証しない。成立根拠はE02。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "C2": {
+        "text": "有効ACLと主体記録からU21へ旧世代上書き権限が付与される。成立根拠はE03・E09、又はE03・E06、又はE03・E05。",
+        "evidenceIds": [
+          "E03",
+          "E09",
+          "E06",
+          "E05"
+        ]
+      },
+      "C3": {
+        "text": "ED1の未承認プロセスに対応する共有セッションがV08を上書きした。成立根拠はE05・E06。",
+        "evidenceIds": [
+          "E05",
+          "E06"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "現在/保持世代の形式不正という症状",
+      "E02": "COPY_OK定義と上書き後の新世代作成",
+      "E03": "調査対象の全実効変更ACLと専用読取/新世代操作",
+      "E04": "保持要件と継承変更の不一致",
+      "E05": "未承認P771の専用CN77全区間所有と/live操作",
+      "E06": "NAS側の同専用接続によるV08成功操作",
+      "E07": "内容指紋と形式の一致",
+      "E08": "健全別保管の復元可能時点と失う改訂",
+      "E09": "所属と共有認証の完全対応",
+      "E10": "正常監視/対照再生と全ログ収録条件",
+      "E11": "別館別NAS前日の容量ノイズ",
+      "E12": "対象/主体/時刻が異なる正規変換の比較"
+    }
+  }
+}

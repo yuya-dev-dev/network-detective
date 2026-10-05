@@ -1,8 +1,10 @@
-import type { PlayableScenario, Solution } from "../scenario/types";
+import type { PlayableScenario, Solution, Narrative } from "../scenario/types";
 import type { Attempt } from "../game/types";
+import { Dialogue } from "./Dialogue";
 import { ExplanationCard } from "./common";
 export function ResultView({
   scenario,
+  narrative,
   solution,
   attempt,
   retry,
@@ -10,6 +12,7 @@ export function ResultView({
   open,
 }: {
   scenario: PlayableScenario;
+  narrative?: Narrative;
   solution: Solution;
   attempt: Attempt;
   retry: () => void;
@@ -52,6 +55,7 @@ export function ResultView({
           {attempt.hintLevel === 0 ? "なし" : `第${attempt.hintLevel}段階まで`}
         </p>
       </div>
+      {narrative?.resultDialogue && <Dialogue lines={narrative.resultDialogue[result.solved ? "solved" : "reconsider"]} title="報告後の会話" />}
       <div className="paper-card">
         <h2>得点の内訳</h2>
         <dl className="score-breakdown">

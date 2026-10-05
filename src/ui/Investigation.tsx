@@ -1,14 +1,14 @@
 import { useState } from "react";
-import type { PlayableScenario } from "../scenario/types";
+import type { PlayableScenario, Narrative } from "../scenario/types";
 import { useGame } from "../app/GameProvider";
 import { Topology } from "./Topology";
 import { EvidenceView } from "./EvidenceView";
 import { HypothesisPanel } from "./HypothesisPanel";
 import { ReportForm } from "./ReportForm";
-import narrative from "../data/narrative.json";
 export type Tab = "topology" | "evidence" | "hypotheses" | "report";
 export function Investigation({
   scenario,
+  narrative,
   tab,
   evidenceId,
   open,
@@ -17,6 +17,7 @@ export function Investigation({
   submitted,
 }: {
   scenario: PlayableScenario;
+  narrative: Narrative;
   tab: Tab;
   evidenceId: string | null;
   open: (id: string) => void;
@@ -31,7 +32,7 @@ export function Investigation({
   return (
     <>
       <div hidden={tab !== "topology"}>
-        <Topology scenario={scenario} open={open} think={think} />
+        <Topology scenario={scenario} open={open} think={think} thought={narrative.tabs.topology} />
       </div>
       <div hidden={tab !== "hypotheses"}>
         <HypothesisPanel
@@ -73,7 +74,7 @@ export function Investigation({
               <h2>資料と診断</h2>
             </div>
             <span className="stamp">
-              閲覧 {attempt.openedEvidenceIds.length}/8
+              閲覧 {attempt.openedEvidenceIds.length}/{scenario.evidence.length}
             </span>
           </div>
           <p className="muted">
@@ -81,7 +82,7 @@ export function Investigation({
           </p>
           <div className="segmented">
             <button aria-pressed={!pinnedOnly} onClick={() => filter(false)}>
-              すべて（8）
+              すべて（{scenario.evidence.length}）
             </button>
             <button aria-pressed={pinnedOnly} onClick={() => filter(true)}>
               確認済み（{attempt.pinnedEvidenceIds.length}）

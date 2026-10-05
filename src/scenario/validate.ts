@@ -92,6 +92,7 @@ export function assertScenario(value: unknown): asserts value is Scenario {
     )
       throw new Error("証拠の種別・取得方法が不正");
     date(e.observedAt, "observedAt");
+    if (e.observedAtLabel !== undefined) string(e.observedAtLabel, "observedAtLabel");
     refs(e.nodeIds, nodeIds, "nodeIds");
     const blocks = array(object(e.content, "content").blocks, "blocks");
     if (!blocks.length) throw new Error("証拠内容が空です");

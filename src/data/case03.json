@@ -1,0 +1,908 @@
+{
+  "schemaVersion": 1,
+  "id": "case03",
+  "revision": 1,
+  "title": "届いた覚えのない返信",
+  "type": "hybrid",
+  "difficulty": 2,
+  "estimatedMinutes": 18,
+  "prerequisites": [
+    "SMTP・認証・CIDRの概要（用語辞典で確認できます）"
+  ],
+  "brief": "貸出店のメール窓口に、送った覚えのない失敗通知が次々に届いています。予約係は本来の予約連絡を探すだけで手いっぱいです。店名を表示したメールを受け取ったという申告もありましたが、表示名だけでは送信経路が分かりません。店のサーバで何を受け付け、どこへ引き渡したかを調べてください。正常時は、外部から店への受信を続け、正規の予約通知も送れる必要があります。一方、未認証の外部接続に外部宛ての中継を許してはいけません。保全した受付・配送・認証記録から影響範囲と原因を報告し、必要な連絡を止めずに戻す手順と確認計画をお願いします。",
+  "context": {
+    "baseline": [
+      "外部から店ドメインへの受信を許可。外部宛て送信は登録内部/32、又はTLSと認証を使う587だけを許可。25で未認証の外部接続から外部ドメインへは中継しない。"
+    ],
+    "assumptions": [
+      "外部から店ドメインへの受信を許可。外部宛て送信は登録内部/32、又はTLSと認証を使う587だけを許可。25で未認証の外部接続から外部ドメインへは中継しない。TCP25の外部受信許可とSMTP中継の認可は別の役割を持つ。",
+      "店ドメイン rental.example.test\n公開MX 198.51.100.67 → 宛先NAT → MTA10.67.20.10\n正規内部通知サーバ 10.67.20.18\n外部接続 192.0.2.72 / 相手MX203.0.113.25\n外部送信元IPはMTAまで保持される（送信元NATなし）",
+      "全10資料を開始時から公開し、任意順に読める。2026-10-01/JST、時計誤差100ms以内。09:20固定。認証値・個人情報は示さない。"
+    ],
+    "snapshotTime": "2026-10-01T09:20:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_EXTERNAL",
+        "label": "外部接続元",
+        "kind": "client",
+        "addresses": [
+          "192.0.2.72"
+        ]
+      },
+      {
+        "id": "N_MX",
+        "label": "公開MX・宛先NAT",
+        "kind": "router",
+        "addresses": [
+          "198.51.100.67",
+          "rental.example.test",
+          "送信元IPを保持"
+        ]
+      },
+      {
+        "id": "N_MTA",
+        "label": "店MTA",
+        "kind": "server",
+        "addresses": [
+          "10.67.20.10",
+          "TCP/25 · TCP/587"
+        ]
+      },
+      {
+        "id": "N_INTERNAL",
+        "label": "正規内部通知サーバ",
+        "kind": "server",
+        "addresses": [
+          "10.67.20.18"
+        ]
+      },
+      {
+        "id": "N_REMOTE",
+        "label": "相手MX",
+        "kind": "server",
+        "addresses": [
+          "203.0.113.25"
+        ]
+      },
+      {
+        "id": "N_RECEIVE",
+        "label": "外部受信試験元",
+        "kind": "client",
+        "addresses": [
+          "192.0.2.90"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_EXTERNAL_MX",
+        "from": "N_EXTERNAL",
+        "to": "N_MX",
+        "label": "外部 ↔ 公開MX（TCP/25）"
+      },
+      {
+        "id": "L_NAT_MTA",
+        "from": "N_MX",
+        "to": "N_MTA",
+        "label": "公開MX ↔ 店MTA（宛先NATのみ）"
+      },
+      {
+        "id": "L_INTERNAL_MTA",
+        "from": "N_INTERNAL",
+        "to": "N_MTA",
+        "label": "内部通知 ↔ 店MTA（登録内部又はTLS・認証587）"
+      },
+      {
+        "id": "L_MTA_REMOTE",
+        "from": "N_MTA",
+        "to": "N_REMOTE",
+        "label": "店MTA ↔ 相手MX（配送とSMTP応答）"
+      },
+      {
+        "id": "L_RECEIVE_MX",
+        "from": "N_RECEIVE",
+        "to": "N_MX",
+        "label": "外部試験 ↔ 公開MX（店宛て25受信）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "窓口の集計メモ",
+      "kind": "report",
+      "nodeIds": [
+        "N_MTA"
+      ],
+      "observedAt": "2026-10-01T09:15:00+09:00",
+      "observedAtLabel": "資料・09:15",
+      "source": "まどかの集計メモと保全通知",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "まどかの集計では正規予約送信12通、知らない失敗通知80通。検証用に保全した通知1通は、店MTAがQ902の恒久失敗を受けて生成したもの。店名表示メールを受け取ったという顧客の話は自己申告として別欄に記載。80通すべての経路や内容は、この集計では確定していない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "外部接続の受付記録",
+      "kind": "log",
+      "nodeIds": [
+        "N_EXTERNAL",
+        "N_MX",
+        "N_MTA"
+      ],
+      "observedAt": "2026-10-01T09:10:00+09:00",
+      "observedAtLabel": "資料・09:10:00〜05",
+      "source": "公開MX接続・店MTAの全受付段階",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "接続 C901：src192.0.2.72 → MX198.51.100.67:25",
+              "MTAで観測したsrc192.0.2.72 / auth=none",
+              "MAIL FROM:<bounce@rental.example.test>",
+              "RCPT TO:<listener@outside.example.test>",
+              "取引T901 DATA後：250 queued Q901 / content hash HM1",
+              "別MAIL/DATA取引T902（同じ接続・auth none）",
+              "MAIL FROM:<bounce@rental.example.test>",
+              "RCPT TO:<absent@outside.example.test>",
+              "DATA後：250 queued Q902"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "T901/T902は各1宛先の別MAIL/DATA取引で、各1キューに対応する。MAIL FROMは接続者が指定する返送先の入力値。店ドメインの記載が、その接続の認証やアドレス所有を証明する仕様ではない。指定キューの全受付段階を保全している。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "キューごとの外部送信記録",
+      "kind": "log",
+      "nodeIds": [
+        "N_MTA",
+        "N_REMOTE"
+      ],
+      "observedAt": "2026-10-01T09:10:06+09:00",
+      "observedAtLabel": "資料・09:10:06〜10",
+      "source": "店MTAの全配送段階・相手MX応答",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "Q901 → 相手MX203.0.113.25",
+              "送信内容hash HM1 / 相手DATA後応答250",
+              "Q902 → 同じ相手MX / RCPT応答550（恒久拒否）",
+              "店MTA：Q902の失敗通知を生成",
+              "通知封筒 MAIL FROM:<> / RCPT TO:<bounce@rental.example.test>"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "250は相手MTAが受け付けた応答。相手の利用者が開いたかは記録していない。指定キューの全配送段階と内容ハッシュを収録。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "稼働中の信頼条件",
+      "kind": "config",
+      "nodeIds": [
+        "N_MTA"
+      ],
+      "observedAt": "2026-10-01T09:12:00+09:00",
+      "observedAtLabel": "資料・09:12",
+      "source": "店MTAの稼働信頼条件",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "trusted_source = 0.0.0.0/0",
+              "rule = trusted-source / priority30"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "外部宛て中継に用いるtrusted_sourceの条件は、この1行が全部。別の内部/32条件や隠れた送信元条件はない。設定値の読取結果であり、本文に原因の評価は加えていない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "受付・中継の正常要件と判定追跡",
+      "kind": "config",
+      "nodeIds": [
+        "N_MTA",
+        "N_INTERNAL"
+      ],
+      "observedAt": "2026-10-01T09:20:00+09:00",
+      "observedAtLabel": "資料・事前仕様／対象Q901",
+      "source": "MTAの事前判定仕様とQ901固定評価入力",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "このMTAの判定順は、①店ドメイン宛てなら受付、②TLSと認証済み587なら中継可、③trusted_sourceに一致なら中継可、④それ以外の外部宛ては550拒否。"
+          },
+          {
+            "type": "text",
+            "body": "Q901の固定評価入力はsrc192.0.2.72、接続25、auth none、recipientは外部ドメイン。店宛て条件に該当せず、認証済み587条件にも該当せず、trusted-source条件の評価へ進んだ。比較するCIDR値はE04に収録する。正常要件では登録内部10.67.20.18/32の送信、認証済み587、外部から店への受信を維持し、未認証外部→外部は拒否する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "移行の承認条件と実施値",
+      "kind": "report",
+      "nodeIds": [
+        "N_MTA",
+        "N_INTERNAL"
+      ],
+      "observedAt": "2026-10-01T08:50:00+09:00",
+      "observedAtLabel": "資料・08:50",
+      "source": "移行承認書と全変更履歴",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "承認対象は内部通知サーバ10.67.20.18/32の移行維持。外部送信権限の拡大は未承認。変更記録はtrusted_sourceの変更前10.67.20.18/32、実施後0.0.0.0/0。08:50〜09:20の全変更履歴で後続変更なし。その他の中継判定順は変更されていない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "認証と受付の監査",
+      "kind": "log",
+      "nodeIds": [
+        "N_MTA"
+      ],
+      "observedAt": "2026-10-01T09:00:00+09:00",
+      "observedAtLabel": "資料・09:00〜20",
+      "source": "店MTAの25/587全認証・受付監査",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "25と587の全認証・受付記録を収録し、欠落0。Q901とQ902の25接続ではAUTH実行なし、auth=none。587に両キューの記録なし。キューIDは別経路のものも統合して一意。記録の不存在について述べられるのはこの期間・対象だけで、すべての資格情報の安全を保証するものではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "正規の予約通知",
+      "kind": "log",
+      "nodeIds": [
+        "N_INTERNAL",
+        "N_MTA",
+        "N_REMOTE"
+      ],
+      "observedAt": "2026-10-01T09:12:00+09:00",
+      "observedAtLabel": "資料・09:12",
+      "source": "正規内部通知・店MTA・相手MTA",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "Q910は内部通知サーバ10.67.20.18からTLS・正規認証587で送信。予約ID B12、外部宛て。相手MTAのDATA後応答は250。本文の個人情報は伏せてある。Q901とは別キューである。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "店宛ての外部受信試験",
+      "kind": "test",
+      "nodeIds": [
+        "N_RECEIVE",
+        "N_MX",
+        "N_MTA"
+      ],
+      "observedAt": "2026-10-01T09:13:00+09:00",
+      "observedAtLabel": "診断・09:13",
+      "source": "外部受信試験元・公開MX・店MTA",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "送信元192.0.2.90から公開MXの25へ接続。宛先は店ドメインrental.example.testの受付アドレス。DATA後250で受信。試験対象は外部→店であり、外部→外部の中継試験ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "前月の宛先変更台帳",
+      "kind": "report",
+      "nodeIds": [],
+      "observedAt": "2026-09-01T00:00:00+09:00",
+      "observedAtLabel": "資料・前月",
+      "source": "メール関連資料の保管台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "旧取引先1件のメール宛先変更が記載されている。現行予約の通知対象には含まれず、今回のキューIDや09:00〜20の期間との対応はない。メール関連資料の保管台帳から添付された記録。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_B1",
+      "label": "正規予約の大量送信",
+      "description": "正規予約の大量送信に伴う失敗が、知らない通知の増加を説明する"
+    },
+    {
+      "id": "H_B2",
+      "label": "SMTP資格情報による送信",
+      "description": "今回の外部宛て送信はSMTP資格情報を使い、認証済みとして中継された"
+    },
+    {
+      "id": "H_B3",
+      "label": "店MTAの全面停止",
+      "description": "店MTAが全面停止し、受信も正規通知も処理できなくなっている"
+    },
+    {
+      "id": "H_B4",
+      "label": "相手のDNS障害",
+      "description": "相手のDNS障害による不達が、今回の外部宛て通信と通知増加を説明する"
+    },
+    {
+      "id": "H_OK",
+      "label": "送信元の信頼範囲拡大",
+      "description": "信頼条件が/0へ広がり、未認証の外部接続にも外部宛て中継を許可"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_OK",
+        "label": "未認証外部中継と確認済みキュー",
+        "description": "25の未認証外部→外部中継。Q901引渡しとQ902失敗通知を確認"
+      },
+      {
+        "id": "S_B1",
+        "label": "正規通知を含む全送信停止",
+        "description": "正規予約通知もすべて止まったと判断し、店の全正規送信を影響範囲とする"
+      },
+      {
+        "id": "S_B2",
+        "label": "全SMTPアカウントの奪取",
+        "description": "今回の知らない通知から、すべてのSMTPアカウントが奪取されたと判断する"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_B1",
+        "label": "正規予約の大量送信",
+        "description": "正規予約の大量送信に伴う失敗が、知らない通知の増加を説明する"
+      },
+      {
+        "id": "H_B2",
+        "label": "SMTP資格情報による送信",
+        "description": "今回の外部宛て送信はSMTP資格情報を使い、認証済みとして中継された"
+      },
+      {
+        "id": "H_B3",
+        "label": "店MTAの全面停止",
+        "description": "店MTAが全面停止し、受信も正規通知も処理できなくなっている"
+      },
+      {
+        "id": "H_B4",
+        "label": "相手のDNS障害",
+        "description": "相手のDNS障害による不達が、今回の外部宛て通信と通知増加を説明する"
+      },
+      {
+        "id": "H_OK",
+        "label": "送信元の信頼範囲拡大",
+        "description": "信頼条件が/0へ広がり、未認証の外部接続にも外部宛て中継を許可"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "K2",
+        "label": "外部からTCP25を許可していること自体が、不正中継を意味する",
+        "description": "外部からTCP25を許可していること自体が、不正中継を意味する",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C2",
+        "label": "当該外部接続は広すぎる信頼条件に一致して中継許可される",
+        "description": "当該外部接続は広すぎる信頼条件に一致して中継許可される",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "K1",
+        "label": "店名のFromが表示されるため、店の認証済み送信と判断できる",
+        "description": "店名のFromが表示されるため、店の認証済み送信と判断できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C3",
+        "label": "未認証外部接続が投入したQ901と同一内容を相手MTAへ引き渡した",
+        "description": "未認証外部接続が投入したQ901と同一内容を相手MTAへ引き渡した",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "K3",
+        "label": "相手MTAの250応答により、顧客が内容を閲覧したと確定する",
+        "description": "相手MTAの250応答により、顧客が内容を閲覧したと確定する",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C1",
+        "label": "未認証の外部接続から外部宛てメールQ901を受け付けた",
+        "description": "未認証の外部接続から外部宛てメールQ901を受け付けた",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "A_B1",
+        "label": "25を止めたままメール運用再開",
+        "description": "ログとキューを保全し25を全面停止する。認証587の送信を確認したら復旧と扱い、店宛て外部受信の25は停止したままメール運用を再開する"
+      },
+      {
+        "id": "A_B2",
+        "label": "パスワード変更と現在の信頼条件",
+        "description": "記録を保全して予約利用者のパスワードを一括変更する。正規通知が送れれば運用を再開し、送信元の信頼条件は現在値のまま使い続ける"
+      },
+      {
+        "id": "A_OK",
+        "label": "承認範囲へ戻し正規連絡を維持",
+        "description": "ログ・キュー保全、承認/32へ戻し未認証外部中継を停止。配送待ちが残る場合は不正と確認した分を保全後隔離。正規送信と店宛て外部受信を維持"
+      },
+      {
+        "id": "A_B3",
+        "label": "保全せず全ログ・全キューを削除",
+        "description": "知らない通知を整理するため全ログと全キューを削除する。別の保全コピーは取らず、画面を空にして新しい予約連絡からメール運用を再開する"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_B1",
+        "label": "外部から店宛ての受信試験だけ",
+        "description": "移行時に外部から店宛ての受信試験を行う。受信成功を中継設定も含む完了条件とし、外部宛て拒否試験は省く"
+      },
+      {
+        "id": "P_OK",
+        "label": "4方向の通信と許可範囲を試験",
+        "description": "移行時に外部→外部拒否、内部送信、認証587、外部→店受信を試験し、許可範囲をレビュー"
+      },
+      {
+        "id": "P_B2",
+        "label": "Fromの店名表示を信頼",
+        "description": "店名を表示するFromを正規送信の基準として扱う。表示を信頼して送信を判断し、接続認証や信頼範囲の比較は省く"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_B1",
+        "label": "公開MXの挨拶応答だけ",
+        "description": "公開MXから挨拶220が返ることを確認する。応答があれば受信と送信の復旧完了とし、宛先別の受付・拒否試験は行わない"
+      },
+      {
+        "id": "V_B2",
+        "label": "正規予約通知の送信成功だけ",
+        "description": "正規予約通知を1件送り相手MTAの受付を確認する。送信成功を復旧完了とし、外部宛て中継拒否と店宛て受信は試験しない"
+      },
+      {
+        "id": "V_OK",
+        "label": "宛先別拒否と正規通信を確認",
+        "description": "4方向を試験。未認証25の外部宛て550・キュー作成なし、残存配送待ちがある場合の確認済み不正分隔離、正規通知継続を確認"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "T1",
+      "level": 1,
+      "text": "接続元と宛先を分け、誰から誰宛ての受付か読む。",
+      "evidenceIds": [
+        "E02",
+        "E03"
+      ]
+    },
+    {
+      "id": "T2",
+      "level": 2,
+      "text": "認証状態と信頼範囲を、判定仕様に対応させる。",
+      "evidenceIds": [
+        "E04",
+        "E05",
+        "E07"
+      ]
+    },
+    {
+      "id": "T3",
+      "level": 3,
+      "text": "受付キューと送信キュー、内容ハッシュを照合する。",
+      "evidenceIds": [
+        "E02",
+        "E03"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "SMTP",
+      "definition": "メールを転送する通信規約。"
+    },
+    {
+      "term": "中継",
+      "definition": "受けたメールを別の宛先側へ転送すること。"
+    },
+    {
+      "term": "MAIL FROM",
+      "definition": "配送で使う返送先。"
+    },
+    {
+      "term": "RCPT TO",
+      "definition": "配送先の指定。"
+    },
+    {
+      "term": "queue ID",
+      "definition": "MTAが管理するメール単位の識別子。"
+    },
+    {
+      "term": "250",
+      "definition": "要求の成功応答で、意味は応答した段階による。"
+    },
+    {
+      "term": "550",
+      "definition": "処理を受け付けられない恒久失敗の応答。"
+    },
+    {
+      "term": "587",
+      "definition": "通常、利用者の認証付き送信に使う受付口。"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_OK",
+    "causeId": "H_OK",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E07"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E04",
+            "E05"
+          ],
+          [
+            "E02",
+            "E04"
+          ],
+          [
+            "E05",
+            "E06"
+          ],
+          [
+            "E02",
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E02",
+            "E03"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "A_OK",
+    "preventionId": "P_OK",
+    "verificationId": "V_OK",
+    "criticalOptionIds": [
+      "A_B3"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：窓口には知らない通知が増えましたが、正規予約送信の数とは分けて記録されています（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "確認できた事実：外部192.0.2.72の未認証25接続から外部宛てQ901を受付済み（E02）、同じ内容HM1を相手MTAが受け付けています（E03）。",
+        "evidenceIds": [
+          "E02",
+          "E03"
+        ]
+      },
+      {
+        "text": "残る原因：認証の利用や店の全面停止ではこの記録を説明できません（E07〜E09）。",
+        "evidenceIds": [
+          "E07",
+          "E08",
+          "E09"
+        ]
+      },
+      {
+        "text": "設定との不一致：中継の入力と判定順（E05）を稼働条件/0（E04）に対応させると、外部接続まで信頼条件に入ります。承認されていたのは内部/32の維持で、外部送信権限の拡大ではありません（E06）。",
+        "evidenceIds": [
+          "E05",
+          "E04",
+          "E06"
+        ]
+      },
+      {
+        "text": "対策：したがってログとキューを保全し、条件を承認範囲へ戻します。配送待ちが残る場合は記録から不正と確認した分を保全後隔離します。Q901は引渡し済み、Q902は通知生成済みで、未記録の保留メールは仮定しません。",
+        "evidenceIds": []
+      },
+      {
+        "text": "確認：未認証外部中継の拒否に加え、内部・認証587の送信と店宛て外部受信も確認する計画が必要です（E05、E08、E09）。すべての通知経路や相手の閲覧までは未確定です（E01、E03）。\n\n未確定：外部送信者の人間の身元、店名メール全件の同一経路、閲覧や詐欺被害、全資格情報の安全。",
+        "evidenceIds": [
+          "E05",
+          "E08",
+          "E09",
+          "E01",
+          "E03"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_B1": {
+        "text": "正規12通とは別の外部接続Q901がある（E01/E02/E08）。",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E08"
+        ]
+      },
+      "H_B2": {
+        "text": "この接続ではAUTH実行なし（E07）。",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H_B3": {
+        "text": "正規通知と外部受信は動作している（E08/E09）。",
+        "evidenceIds": [
+          "E08",
+          "E09"
+        ]
+      },
+      "H_B4": {
+        "text": "相手への到達とQ901受付が確認される（E03）。",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "H_OK": {
+        "text": "設定との不一致：中継の入力と判定順（E05）を稼働条件/0（E04）に対応させると、外部接続まで信頼条件に入ります。承認されていたのは内部/32の維持で、外部送信権限の拡大ではありません（E06）。",
+        "evidenceIds": [
+          "E05",
+          "E04",
+          "E06"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_B1": {
+        "text": "正規通知と外部受信は動作している（E08/E09）。",
+        "evidenceIds": [
+          "E08",
+          "E09"
+        ]
+      },
+      "H_B3": {
+        "text": "正規通知と外部受信は動作している（E08/E09）。",
+        "evidenceIds": [
+          "E08",
+          "E09"
+        ]
+      },
+      "S_B2": {
+        "text": "今回の接続が未認証だった記録から、全アカウント奪取は言えない（E02/E07）。",
+        "evidenceIds": [
+          "E02",
+          "E07"
+        ]
+      },
+      "H_B1": {
+        "text": "正規12通とは別の外部接続Q901がある（E01/E02/E08）。",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E08"
+        ]
+      },
+      "H_B2": {
+        "text": "この接続ではAUTH実行なし（E07）。",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H_B4": {
+        "text": "相手への到達とQ901受付が確認される（E03）。",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "K1": {
+        "text": "表示や返送先は入力値で認証記録ではない（E02/E05）。",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      "K2": {
+        "text": "25は店宛て外部受信にも必要で、宛先中継はMTAの判定（E05/E09）。",
+        "evidenceIds": [
+          "E05",
+          "E09"
+        ]
+      },
+      "K3": {
+        "text": "250は相手MTAの受付で閲覧の記録ではない（E03）。",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "A_B1": {
+        "text": "一時封じ込めにはなり得るが、正規外部受信も止めるため恒久復旧手順として不足（E05/E09）。",
+        "evidenceIds": [
+          "E05",
+          "E09"
+        ]
+      },
+      "A_B2": {
+        "text": "未認証接続に適用された信頼条件が残る（E04/E07）。",
+        "evidenceIds": [
+          "E04",
+          "E07"
+        ]
+      },
+      "A_B3": {
+        "text": "原因と対象キューの証拠を失う危険操作（E02/E03/E07）。",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E07"
+        ]
+      },
+      "P_B1": {
+        "text": "受信試験では外部宛て中継拒否を検証できない（E05/E09）。",
+        "evidenceIds": [
+          "E05",
+          "E09"
+        ]
+      },
+      "P_B2": {
+        "text": "From表示は中継認可の根拠にならない（E02/E05）。",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      "V_B1": {
+        "text": "挨拶だけでは受付・中継条件を確認できない（E05）。",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "V_B2": {
+        "text": "正規送信だけでは未認証外部中継の拒否や店宛て受信を確認できない（E05/E08/E09）。",
+        "evidenceIds": [
+          "E05",
+          "E08",
+          "E09"
+        ]
+      },
+      "S_OK": {
+        "text": "症状：窓口には知らない通知が増えましたが、正規予約送信の数とは分けて記録されています（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "H_OK": {
+        "text": "設定との不一致：中継の入力と判定順（E05）を稼働条件/0（E04）に対応させると、外部接続まで信頼条件に入ります。承認されていたのは内部/32の維持で、外部送信権限の拡大ではありません（E06）。",
+        "evidenceIds": [
+          "E05",
+          "E04",
+          "E06"
+        ]
+      },
+      "A_OK": {
+        "text": "対策：したがってログとキューを保全し、条件を承認範囲へ戻します。配送待ちが残る場合は記録から不正と確認した分を保全後隔離します。Q901は引渡し済み、Q902は通知生成済みで、未記録の保留メールは仮定しません。",
+        "evidenceIds": []
+      },
+      "P_OK": {
+        "text": "移行時に外部→外部拒否、内部送信、認証587、外部→店受信を試験し、許可範囲をレビュー。",
+        "evidenceIds": [
+          "E05",
+          "E06"
+        ]
+      },
+      "V_OK": {
+        "text": "確認：未認証外部中継の拒否に加え、内部・認証587の送信と店宛て外部受信も確認する計画が必要です（E05、E08、E09）。すべての通知経路や相手の閲覧までは未確定です（E01、E03）。",
+        "evidenceIds": [
+          "E05",
+          "E08",
+          "E09",
+          "E01",
+          "E03"
+        ]
+      },
+      "C1": {
+        "text": "未認証の外部接続から外部宛てメールQ901を受け付けた。成立根拠はE02。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "C2": {
+        "text": "当該外部接続は広すぎる信頼条件に一致して中継許可される。成立根拠はE04・E05、又はE02・E04、又はE05・E06、又はE02・E06。",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E02",
+          "E06"
+        ]
+      },
+      "C3": {
+        "text": "未認証外部接続が投入したQ901と同一内容を相手MTAへ引き渡した。成立根拠はE02・E03。",
+        "evidenceIds": [
+          "E02",
+          "E03"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "通知集計と全件断定の限界",
+      "E02": "未認証外部から外部宛ての受付",
+      "E03": "キュー・内容対応と相手引渡し/失敗通知",
+      "E04": "信頼する送信元範囲",
+      "E05": "宛先/認証/信頼判定の順序と入力",
+      "E06": "承認内部範囲からの変更と後続変更なし",
+      "E07": "対象の全認証/受付による別認証経路の反証",
+      "E08": "正規認証通知の継続",
+      "E09": "正常な外部から店への受信",
+      "E10": "時期・対象の違う宛先台帳ノイズ"
+    }
+  }
+}

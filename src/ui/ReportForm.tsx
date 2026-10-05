@@ -98,7 +98,7 @@ export function ReportForm({
                 />
                 <span>
                   <strong>{o.label}</strong>
-                  <small>{o.description}</small>
+                  {o.description !== o.label && <small>{o.description}</small>}
                   <small className="claim-requirement">
                     必要な証拠：{o.requiredEvidenceCount}件
                   </small>
@@ -191,7 +191,7 @@ export function ReportForm({
                   />
                   <span>
                     <strong>{o.label}</strong>
-                    <small>{o.description}</small>
+                    {o.description !== o.label && <small>{o.description}</small>}
                   </span>
                 </label>
               ))}

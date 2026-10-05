@@ -67,7 +67,7 @@ test("cached application and case play completely offline under a subdirectory",
     await expect(
       page.getByRole("heading", { name: "受信した依頼", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "依頼を開く" }).click();
+    await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
     await page.getByRole("button", { name: "現場の調査を始める" }).click();
     await readAll(page);
     await fill(page, correctReport());
@@ -75,6 +75,16 @@ test("cached application and case play completely offline under a subdirectory",
     await expect(page.locator(".score")).toHaveText("100/100");
     await page.reload();
     await expect(page.locator(".score")).toHaveText("100/100");
+    // All additional topology/data bundles must also be available from the real cache.
+    for (const id of ["case02","case03","case04","case05","case06"]) {
+      await page.getByRole("button", {name:"事件一覧へ",exact:true}).last().click();
+      await page.locator(`[data-case-id="${id}"]`).getByRole("button", {name:"依頼を開く"}).click();
+      await page.getByRole("button", {name:"現場の調査を始める"}).click();
+      await expect(page.locator(".map-overview")).toBeVisible();
+    }
+    const lastReload = await page.reload();
+    expect(lastReload?.fromServiceWorker()).toBe(true);
+    await expect(page.locator(".investigation-toolbar")).toContainText("CASE 06");
   } finally {
     if (browserName !== "webkit") await context.setOffline(false);
     await server.close();
@@ -90,7 +100,7 @@ test("updates wait for the list, require saving and protect other open tabs", as
     await expect(
       page.getByText("オフライン準備完了", { exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "依頼を開く" }).click();
+    await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
     await page.getByRole("button", { name: "現場の調査を始める" }).click();
     await tab(page, "報告").click();
     const input = page.locator('input[name="scopeId"]').first();
