@@ -50,7 +50,7 @@ export function EvidenceView({
         </div>
         <div>
           <dt>観測時刻</dt>
-          <dd>{observed} JST</dd>
+          <dd>{evidence.observedAtLabel ?? `${observed} JST`}</dd>
         </div>
         <div>
           <dt>取得方法</dt>
@@ -128,7 +128,7 @@ export function EvidenceView({
                     <div>
                       <dt>送信元</dt>
                       <dd>
-                        {fields.src ?? fields.client ?? "この行には記録なし"}
+                        {fields.src ?? fields.client ?? "定型項目として抽出できません（原文を参照）"}
                       </dd>
                     </div>
                     <div>
@@ -137,7 +137,7 @@ export function EvidenceView({
                         {fields.dst ??
                           fields.resolver ??
                           fields.url ??
-                          "この行には記録なし"}
+                          "定型項目として抽出できません（原文を参照）"}
                         {fields.dport ? `:${fields.dport}` : ""}
                       </dd>
                     </div>
@@ -149,7 +149,7 @@ export function EvidenceView({
                           fields.HTTP ??
                           (fields.A
                             ? `A ${fields.A} / TTL ${fields.TTL}`
-                            : "この行には記録なし")}
+                            : "定型項目として抽出できません（原文を参照）")}
                       </dd>
                     </div>
                   </dl>

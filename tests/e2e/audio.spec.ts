@@ -74,7 +74,7 @@ test("generated MP3 plays only on request, survives navigation, stops on departu
   expect(
     await page.evaluate(() => (window as AudioWindow).testSource!.loop),
   ).toBe(true);
-  await page.getByRole("button", { name: "依頼を開く" }).click();
+  await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
   await playing(page);
   await page.getByRole("button", { name: "BGMをOFFにする" }).click();
   await stopped(page);
@@ -121,7 +121,7 @@ test("audio playback rejection leaves the game usable and allows manual retry", 
     page.getByRole("button", { name: "BGMをONにする" }),
   ).toHaveAttribute("title", /もう一度タップ/);
   await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
-  await expect(page.getByRole("button", { name: "依頼を開く" })).toBeVisible();
+  await expect(page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" })).toBeVisible();
   await page.getByRole("button", { name: "BGMをONにする" }).click();
   await playing(page);
 });
@@ -140,7 +140,7 @@ test("missing audio support does not prevent playing the game", async ({
     page.getByRole("button", { name: "BGMをONにする" }),
   ).toHaveAttribute("title", /もう一度タップ/);
   await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
-  await page.getByRole("button", { name: "依頼を開く" }).click();
+  await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
   await page.getByRole("button", { name: "現場の調査を始める" }).click();
   await expect(
     page.getByRole("navigation", { name: "調査タブ" }),

@@ -1,0 +1,961 @@
+{
+  "schemaVersion": 1,
+  "id": "case05",
+  "revision": 1,
+  "title": "内側の客",
+  "type": "hybrid",
+  "difficulty": 3,
+  "estimatedMinutes": 21,
+  "prerequisites": [
+    "VPN・セッション・認証と認可の概要（用語辞典で確認できます）"
+  ],
+  "brief": "共同劇場の準備資料を扱うポータルで、A団体の担当者から「別団体の未公開資料が開いた」という報告がありました。担当者は自団体の準備を進めるため、通常どおりVPNに接続し、自分の資料も開けています。資料管理者は、各団体から預かった約束を守りつつ、準備を続けてよいか判断できずにいます。認証、接続、要求、本文返却の記録から、確認できた範囲と原因を報告してください。正常時は、自分の団体の非公開資料と明示共有された資料だけを読め、匿名は拒否されます。この条件はVPN内外で共通です。正規の閲覧を戻す手順と、所属の異なる利用者まで含めた確認計画をお願いします。",
+  "context": {
+    "baseline": [
+      "非公開資料は所属団体の一致、又は明示共有がある場合だけ本文を返す。匿名拒否。ネットワークの内部IPは所属の代わりではない。VPN内外に同じ資料条件を適用する。"
+    ],
+    "assumptions": [
+      "非公開資料は所属団体の一致、又は明示共有がある場合だけ本文を返す。匿名拒否。ネットワークの内部IPは所属の代わりではない。VPN内外に同じ資料条件を適用する。",
+      "U17 / A団体 / IdP10.68.10.10\nVPNの割当範囲10.68.50.0/24 → ポータル10.68.20.18:443\n同じ試験端末の非VPN側10.68.60.23\n→ 許可試験LAN10.68.60.0/24 → L3ルータ → 同ポータル\nNAT・プロキシなし。APIには実際のpeerIPが見える",
+      "図は経路仕様を示す。ポータルセッションは送信元IPに固定しない。本人の同じ試験端末で有効な同一セッションを保持し、経路だけを変える比較は許可される。試験用S17の登録主体はU17/A。セッション有効性と正規VPN割当の実測は認証・接続資料に収録する。APIの主体は検証済みサーバセッションから取得し、利用者入力ヘッダ・URLの主体値は信用しない。",
+      "全11資料は初期公開・任意順。2026-10-01/JST、時計誤差100ms以内、09:20固定。認証の秘密や資料本文の秘密情報は掲載しない。"
+    ],
+    "snapshotTime": "2026-10-01T09:20:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_CLIENT",
+        "label": "U17の同じ試験端末",
+        "kind": "client",
+        "addresses": [
+          "U17 / A団体",
+          "S17登録主体 U17/A"
+        ]
+      },
+      {
+        "id": "N_VPN_IF",
+        "label": "試験端末のVPN側IF",
+        "kind": "client",
+        "addresses": [
+          "VPN割当範囲 10.68.50.0/24",
+          "実割当・継続状態はE03"
+        ]
+      },
+      {
+        "id": "N_VPN",
+        "label": "VPN接続・割当",
+        "kind": "vpn",
+        "addresses": [
+          "VPN認証とポータル認証は別"
+        ]
+      },
+      {
+        "id": "N_TEST_IF",
+        "label": "試験端末の非VPN側IF",
+        "kind": "client",
+        "addresses": [
+          "10.68.60.23"
+        ]
+      },
+      {
+        "id": "N_L3",
+        "label": "許可試験LANのL3ルータ",
+        "kind": "router",
+        "addresses": [
+          "10.68.60.0/24"
+        ]
+      },
+      {
+        "id": "N_PORTAL",
+        "label": "資料ポータル・API",
+        "kind": "server",
+        "addresses": [
+          "10.68.20.18",
+          "TCP/443"
+        ]
+      },
+      {
+        "id": "N_IDP",
+        "label": "IdP",
+        "kind": "identity",
+        "addresses": [
+          "10.68.10.10"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_CLIENT_VPN_IF",
+        "from": "N_CLIENT",
+        "to": "N_VPN_IF",
+        "label": "同端末のVPN側IF（所属関係）"
+      },
+      {
+        "id": "L_CLIENT_TEST_IF",
+        "from": "N_CLIENT",
+        "to": "N_TEST_IF",
+        "label": "同端末の非VPN側IF（所属関係）"
+      },
+      {
+        "id": "L_VPN_IF",
+        "from": "N_VPN_IF",
+        "to": "N_VPN",
+        "label": "VPN接続（実割当はE03）"
+      },
+      {
+        "id": "L_VPN_PORTAL",
+        "from": "N_VPN",
+        "to": "N_PORTAL",
+        "label": "VPN経路 ↔ 同API（NAT・プロキシなし）"
+      },
+      {
+        "id": "L_TEST_L3",
+        "from": "N_TEST_IF",
+        "to": "N_L3",
+        "label": "許可試験LAN ↔ L3（IF選択）"
+      },
+      {
+        "id": "L_L3_PORTAL",
+        "from": "N_L3",
+        "to": "N_PORTAL",
+        "label": "L3 ↔ 同API（NAT・プロキシなし）"
+      },
+      {
+        "id": "L_CLIENT_IDP",
+        "from": "N_CLIENT",
+        "to": "N_IDP",
+        "label": "主体 ↔ IdP（認証記録の関係）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "担当者の報告",
+      "kind": "report",
+      "nodeIds": [
+        "N_CLIENT"
+      ],
+      "observedAt": "2026-10-01T09:12:00+09:00",
+      "observedAtLabel": "資料・09:12",
+      "source": "U17の自己申告・小田の受付記録",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "U17の申告：「VPN接続中、別団体の未公開資料が開いた。自分の通常資料も開く」。小田が受け付けた自己申告として収録。実際の主体、返却内容、資料の区分を確定する測定値はこの報告に含まない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "認証と所属の記録",
+      "kind": "log",
+      "nodeIds": [
+        "N_CLIENT",
+        "N_IDP"
+      ],
+      "observedAt": "2026-10-01T09:08:00+09:00",
+      "observedAtLabel": "資料・IdP／09:08〜20",
+      "source": "IdPの対象期間認証・所属・共有記録",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "主体U17 / 所属A / 個別共有なし",
+              "09:08 VPN認証成功 event I501",
+              "09:09 ポータル認証成功 event I502 / session S17",
+              "S17有効 / クレーム署名検証成功"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "対象期間の所属・共有記録は完全。VPN認証とポータル認証は別イベント。認証情報の秘密値は表示しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "VPN割当台帳",
+      "kind": "log",
+      "nodeIds": [
+        "N_VPN_IF",
+        "N_VPN"
+      ],
+      "observedAt": "2026-10-01T09:08:00+09:00",
+      "observedAtLabel": "資料・09:08〜20",
+      "source": "VPN接続と割当の完全台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "I501に対応するVPNセッションV31、主体U17、配布IP10.68.50.23、接続継続中。重複IPや別主体への割当なし。U17の端末鍵で接続し、対象期間に他端末セッションなし。この台帳は接続と割当の記録で、端末を操作した人間の身元や意図を確定しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "資料APIの要求R41",
+      "kind": "log",
+      "nodeIds": [
+        "N_CLIENT",
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:11:02+09:00",
+      "observedAtLabel": "資料・09:11:02",
+      "source": "ポータル資料APIの要求・本文返却記録",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "request R41 / server_session S17 / actor U17",
+              "署名検証済みactor_group A",
+              "peer10.68.50.23 / GET D204",
+              "response200 / body bytes8192",
+              "object version v3 / body hash HB204"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "これは資料取得APIの記録で、healthの応答ではない。ハッシュは実際に返した本文を照合する値で、秘密の本文そのものは示さない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "資料の区分台帳",
+      "kind": "config",
+      "nodeIds": [
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:10:00+09:00",
+      "observedAtLabel": "資料・09:10現在",
+      "source": "資料所有・公開区分・版・ハッシュ台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "D204：owner B / private / version v3 / hash HB204",
+              "D101：A団体の資料 / private"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "所有団体、公開状態、版、本文ハッシュを台帳で管理する。ハッシュは内容一致を確かめるための値。資料の秘密情報や本文の内容はこの台帳に載せない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "稼働設定とR41の処理追跡",
+      "kind": "config",
+      "nodeIds": [
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:11:00+09:00",
+      "observedAtLabel": "資料・09:11",
+      "source": "ポータル稼働設定とR41固定処理追跡",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "vpn_bypass_owner_check=true",
+              "VPN割当範囲10.68.50.0/24",
+              "順序：session検証 → 範囲一致時は例外で所有比較省略",
+              "       → その他は所有比較 → 本文返却",
+              "R41：session valid / internal match / owner_compare=SKIP",
+              "response200",
+              "09:00 設定変更 false → true / 配備ビルド同一"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "稼働条件と実要求の固定追跡であり、原因の評価や正誤ラベルは付けていない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "団体間の閲覧要件",
+      "kind": "config",
+      "nodeIds": [
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:20:00+09:00",
+      "observedAtLabel": "資料・事前有効",
+      "source": "事前有効の団体間閲覧要件",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "非公開資料は主体の所属団体と一致、又は明示共有がある場合だけ許可する。D204へのA団体共有なし。匿名は拒否し、VPN内外で同じ条件を守る。healthは診断用で、団体間の資料認可を証明する機能ではない。個別権限は変更されていない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "許可された比較試験",
+      "kind": "test",
+      "nodeIds": [
+        "N_CLIENT",
+        "N_TEST_IF",
+        "N_L3",
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:15:00+09:00",
+      "observedAtLabel": "診断・09:15",
+      "source": "許可された同端末の比較試験・API実peer",
+      "acquisition": "diagnostic",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "同じU17試験端末 / 同じ有効S17 / 同じ所属・認可設定",
+              "V31は継続。許可IF・経路選択で試験LAN経由に固定",
+              "試験LAN10.68.60.23 → L3 → API10.68.20.18:443",
+              "NAT・プロキシなし / API実peer10.68.60.23",
+              "R42 / GET D204 / owner_compare実施 / 403 / body bytes0",
+              "同じ経路でD101取得：200"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "試験LANは内部で、VPN割当範囲外。本人・セッション・対象資料を保った比較が仕様上許可されている。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "指定資料APIの全取得監査",
+      "kind": "log",
+      "nodeIds": [
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:00:00+09:00",
+      "observedAtLabel": "資料・09:00〜20",
+      "source": "指定資料APIの全要求・返却監査",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "log",
+            "lines": [
+              "R41 / S17 / D204 / v3 / 200 / 8192B / HB204",
+              "R42 / S17 / D204 / 403 / 0B",
+              "その他：S17 / D101 / v1 / 200"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "指定APIの全要求と返却を収録、欠落0、保管正常。所属・所有・公開状態はこの監査には載せない。生ログに「団体外返却」等の作者による分類は付けない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "管理UIと診断応答",
+      "kind": "test",
+      "nodeIds": [
+        "N_CLIENT",
+        "N_PORTAL"
+      ],
+      "observedAt": "2026-10-01T09:00:00+09:00",
+      "observedAtLabel": "資料・09:00〜20",
+      "source": "管理UIのロール記録・health診断",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "U17の管理ロール変更は0。health応答200。管理UIのロール管理と、資料APIの所属に基づく閲覧認可は別の機能として運用されている。資料の返却内容はこの記録にはない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "title": "公開物の閲覧台帳",
+      "kind": "report",
+      "nodeIds": [],
+      "observedAt": "2026-09-30T00:00:00+09:00",
+      "observedAtLabel": "資料・前日",
+      "source": "公開物の前日閲覧保管台帳",
+      "acquisition": "document",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "公開チラシD900の閲覧増を記録。D900はpublic。集計期間は前日で、今回の09:00〜20には含まれない。公開物の保管台帳から添付されたもの。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_B1",
+      "label": "別団体アカウントによる閲覧",
+      "description": "別団体アカウントを使い、その団体の資料として正規に返却された"
+    },
+    {
+      "id": "H_OK",
+      "label": "VPN割当IPに基づく認可例外",
+      "description": "VPN割当IPを信頼する例外が、非公開資料の所有団体比較を省略した"
+    },
+    {
+      "id": "H_B2",
+      "label": "全資料の公開設定",
+      "description": "すべての資料が公開に設定され、所属に関係なく返却されている"
+    },
+    {
+      "id": "H_B3",
+      "label": "表示画面だけの不具合",
+      "description": "表示画面の不具合であり、非公開資料本文は実際に返却されていない"
+    },
+    {
+      "id": "H_B4",
+      "label": "VPN認証回避と不正IP割当",
+      "description": "VPN認証を回避し、正規割当ではないIPを使って資料を要求した"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_B1",
+        "label": "全資料の全世界公開",
+        "description": "D204の返却から全資料が全世界へ公開されたと判断し、閲覧者も対象も限定しない"
+      },
+      {
+        "id": "S_B2",
+        "label": "管理UIの全権限奪取",
+        "description": "資料の返却を管理UIの全権限奪取とみなし、すべての管理操作を影響範囲にする"
+      },
+      {
+        "id": "S_OK",
+        "label": "内部経路で確認したD204返却",
+        "description": "内部IP経由の非公開資料APIで所属外返却が成立。確認済みはD204"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_B1",
+        "label": "別団体アカウントによる閲覧",
+        "description": "別団体アカウントを使い、その団体の資料として正規に返却された"
+      },
+      {
+        "id": "H_OK",
+        "label": "VPN割当IPに基づく認可例外",
+        "description": "VPN割当IPを信頼する例外が、非公開資料の所有団体比較を省略した"
+      },
+      {
+        "id": "H_B2",
+        "label": "全資料の公開設定",
+        "description": "すべての資料が公開に設定され、所属に関係なく返却されている"
+      },
+      {
+        "id": "H_B3",
+        "label": "表示画面だけの不具合",
+        "description": "表示画面の不具合であり、非公開資料本文は実際に返却されていない"
+      },
+      {
+        "id": "H_B4",
+        "label": "VPN認証回避と不正IP割当",
+        "description": "VPN認証を回避し、正規割当ではないIPを使って資料を要求した"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "K2",
+        "label": "healthが200を返したため、団体間の閲覧認可も正しいと判断できる",
+        "description": "healthが200を返したため、団体間の閲覧認可も正しいと判断できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C2",
+        "label": "A団体U17へB団体の非公開D204本文を返却した",
+        "description": "A団体U17へB団体の非公開D204本文を返却した",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "K1",
+        "label": "VPN本人認証に成功すれば、所属に関係なく全資料を閲覧できる",
+        "description": "VPN本人認証に成功すれば、所属に関係なく全資料を閲覧できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C3",
+        "label": "内部IP例外で当該APIの所有団体比較を省略した",
+        "description": "内部IP例外で当該APIの所有団体比較を省略した",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "K3",
+        "label": "R41の200応答から、すべての資料が公開状態だと判断できる",
+        "description": "R41の200応答から、すべての資料が公開状態だと判断できる",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C1",
+        "label": "U17の有効ポータルセッションと正規VPN割当が存在する",
+        "description": "U17の有効ポータルセッションと正規VPN割当が存在する",
+        "requiredEvidenceCount": 2
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "A_OK",
+        "label": "例外を無効化し各要求の所属を確認",
+        "description": "設定・ログを保全し対象APIを一時制限。例外を無効化し、全要求で所属又は明示共有を確認。検証して正規閲覧再開"
+      },
+      {
+        "id": "A_B1",
+        "label": "VPN本人確認だけを強化",
+        "description": "設定とログを保全しVPNの本人確認を強化する。正規接続ができれば閲覧を再開し、資料APIの所有比較の例外は現在設定を維持する"
+      },
+      {
+        "id": "A_B2",
+        "label": "U17のパスワードだけを変更",
+        "description": "ログと台帳を保全しU17のパスワードを変更する。再認証でポータルへ入れれば閲覧を再開し、所有比較の設定は現在値を使う"
+      },
+      {
+        "id": "A_B3",
+        "label": "監査を保全せず削除",
+        "description": "対応の整理として監査を削除する。返却対象や処理追跡の別保全は行わず、管理画面とログインの応答を確認して資料業務を続ける"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_OK",
+        "label": "団体間拒否と団体内許可を両経路で試験",
+        "description": "構成や設定を変更する時、VPN内外の両経路で団体間拒否と団体内許可を試験する。認可の例外条件もレビューしてから運用へ反映する"
+      },
+      {
+        "id": "P_B1",
+        "label": "内部IPを所属の代わりに信頼",
+        "description": "内部IPを正規利用者の信頼基準にする。対象団体の比較を省き、VPNの本人確認を守ることを閲覧管理の基準にする"
+      },
+      {
+        "id": "P_B2",
+        "label": "healthだけを継続監視",
+        "description": "healthを継続監視し、正常応答なら資料の閲覧条件も正常と扱う。団体間の拒否試験は監視対象に含めない"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_B1",
+        "label": "VPN接続と正規割当だけ",
+        "description": "U17のVPN接続と正規割当を確認する。接続成功を閲覧復旧の基準とし、資料別の許可・拒否や返却本文は試験しない"
+      },
+      {
+        "id": "V_OK",
+        "label": "団体・匿名・本文・監査を確認",
+        "description": "VPN内外でU17/D101許可、U17/D204拒否、B利用者/D204許可、匿名拒否。拒否本文0と監査を確認"
+      },
+      {
+        "id": "V_B2",
+        "label": "管理画面とロールだけ",
+        "description": "管理画面が表示されロールが不変なことを確認する。画面の正常を資料閲覧も含む復旧完了とし、APIの団体比較は確認しない"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "T1",
+      "level": 1,
+      "text": "接続・本人確認の条件と、資料閲覧の条件を分ける。",
+      "evidenceIds": [
+        "E02",
+        "E03"
+      ]
+    },
+    {
+      "id": "T2",
+      "level": 2,
+      "text": "主体、資料の所有団体、返却結果を照合する。",
+      "evidenceIds": [
+        "E04",
+        "E05"
+      ]
+    },
+    {
+      "id": "T3",
+      "level": 3,
+      "text": "処理順の中で、どの比較を実施したか確認する。",
+      "evidenceIds": [
+        "E06",
+        "E07",
+        "E08"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "認証",
+      "definition": "主体が誰かを確かめること。"
+    },
+    {
+      "term": "認可",
+      "definition": "その主体に操作を許すかを判断すること。"
+    },
+    {
+      "term": "所有団体",
+      "definition": "資料を管理する団体。"
+    },
+    {
+      "term": "主体",
+      "definition": "システムが権限を判断する利用者等の識別単位。"
+    },
+    {
+      "term": "セッション",
+      "definition": "認証後のやり取りを識別する状態。"
+    },
+    {
+      "term": "内部IP",
+      "definition": "組織内のネットワークで使うアドレス。内部IP自体に団体所属の意味はない。"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_OK",
+    "causeId": "H_OK",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02",
+            "E03"
+          ],
+          [
+            "E03",
+            "E04"
+          ],
+          [
+            "E03",
+            "E08"
+          ],
+          [
+            "E03",
+            "E09"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E04",
+            "E05"
+          ],
+          [
+            "E05",
+            "E09"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E08"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "A_OK",
+    "preventionId": "P_OK",
+    "verificationId": "V_OK",
+    "criticalOptionIds": [
+      "A_B3"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：VPN中に別団体資料が開いたという申告に対し（E01）、",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "確認できた事実：U17の有効なポータルセッションと正規のVPN割当が確認できます（E02/E03）。APIは検証済みのA団体U17としてD204を要求し、8192Bの本文を返しました（E04）。台帳のD204はB団体・非公開で、版とハッシュも一致します（E05）。",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E04",
+          "E05"
+        ]
+      },
+      {
+        "text": "残る原因：表示だけの問題や全資料公開では、この組合せを説明できません。",
+        "evidenceIds": []
+      },
+      {
+        "text": "設定との不一致：稼働設定とR41の追跡では、VPN範囲に一致したため所有団体比較を省略しています（E06）。非公開資料は団体一致か明示共有が必要という要件に、この例外が反しています（E07）。同じ端末・S17による許可試験LANからは所有比較を行いD204を拒否しており、経路条件との対応も確認できます（E08）。",
+        "evidenceIds": [
+          "E06",
+          "E07",
+          "E08"
+        ]
+      },
+      {
+        "text": "対策：設定とログを保全し、必要な一時制限の上で例外を無効化し、全要求の所属又は共有を確認するのが修復です。",
+        "evidenceIds": []
+      },
+      {
+        "text": "確認：VPN内外で団体内許可・団体間拒否・匿名拒否を組み合わせ、拒否時に本文0で監査が残るか確認します（E07/E08）。確認できた返却は指定期間のD204で、全世界公開や管理権限奪取、返却後の利用までは分かりません（E09/E10）。\n\n未確定：人間の悪意、アカウントの物理的操作者、返却後の保存・二次利用、対象期間外の漏えい。「盗難が絶対にない」を反証として主張しない。",
+        "evidenceIds": [
+          "E07",
+          "E08",
+          "E09",
+          "E10"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_B1": {
+        "text": "要求主体は検証済みA団体U17（E02/E04）。",
+        "evidenceIds": [
+          "E02",
+          "E04"
+        ]
+      },
+      "H_OK": {
+        "text": "設定との不一致：稼働設定とR41の追跡では、VPN範囲に一致したため所有団体比較を省略しています（E06）。非公開資料は団体一致か明示共有が必要という要件に、この例外が反しています（E07）。同じ端末・S17による許可試験LANからは所有比較を行いD204を拒否しており、経路条件との対応も確認できます（E08）。",
+        "evidenceIds": [
+          "E06",
+          "E07",
+          "E08"
+        ]
+      },
+      "H_B2": {
+        "text": "台帳はprivateで、共有要件もある（E05/E07）。",
+        "evidenceIds": [
+          "E05",
+          "E07"
+        ]
+      },
+      "H_B3": {
+        "text": "返却本文の版・ハッシュが台帳と一致（E04/E05）。",
+        "evidenceIds": [
+          "E04",
+          "E05"
+        ]
+      },
+      "H_B4": {
+        "text": "VPN認証成功と正規割当が記録されている（E02/E03）。",
+        "evidenceIds": [
+          "E02",
+          "E03"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_B1": {
+        "text": "指定API・期間のD204返却を、全資料・全世界へ広げられない（E09）。",
+        "evidenceIds": [
+          "E09"
+        ]
+      },
+      "S_B2": {
+        "text": "管理ロール変更0で、資料APIの認可とは別機能（E10）。",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "H_B1": {
+        "text": "要求主体は検証済みA団体U17（E02/E04）。",
+        "evidenceIds": [
+          "E02",
+          "E04"
+        ]
+      },
+      "H_B2": {
+        "text": "台帳はprivateで、共有要件もある（E05/E07）。",
+        "evidenceIds": [
+          "E05",
+          "E07"
+        ]
+      },
+      "H_B3": {
+        "text": "返却本文の版・ハッシュが台帳と一致（E04/E05）。",
+        "evidenceIds": [
+          "E04",
+          "E05"
+        ]
+      },
+      "H_B4": {
+        "text": "VPN認証成功と正規割当が記録されている（E02/E03）。",
+        "evidenceIds": [
+          "E02",
+          "E03"
+        ]
+      },
+      "K1": {
+        "text": "認証は閲覧対象ごとの条件を代替しない（E07）。",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "K2": {
+        "text": "healthは診断用で認可を試験しない（E07/E10）。",
+        "evidenceIds": [
+          "E07",
+          "E10"
+        ]
+      },
+      "K3": {
+        "text": "200だけでは所有・公開状態を読めず、全資料の判断もできない（E04/E05/E09）。",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E09"
+        ]
+      },
+      "A_B1": {
+        "text": "有効な主体の要求に適用する認可例外が残る（E06）。",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "A_B2": {
+        "text": "有効な主体の要求に適用する認可例外が残る（E06）。",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "A_B3": {
+        "text": "返却対象と処理の証拠を失う危険操作（E04/E06/E09）。",
+        "evidenceIds": [
+          "E04",
+          "E06",
+          "E09"
+        ]
+      },
+      "P_B1": {
+        "text": "内部IPに所属を代替させる条件は正常要件と不一致（E07）。",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "P_B2": {
+        "text": "healthだけでは団体間の拒否を検証できない（E10）。",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "V_B1": {
+        "text": "接続成功は本文の許可条件を確認しない（E03/E07）。",
+        "evidenceIds": [
+          "E03",
+          "E07"
+        ]
+      },
+      "V_B2": {
+        "text": "管理UI表示は資料APIの本文返却を確認しない（E10）。",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "S_OK": {
+        "text": "症状：VPN中に別団体資料が開いたという申告に対し（E01）、",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "H_OK": {
+        "text": "設定との不一致：稼働設定とR41の追跡では、VPN範囲に一致したため所有団体比較を省略しています（E06）。非公開資料は団体一致か明示共有が必要という要件に、この例外が反しています（E07）。同じ端末・S17による許可試験LANからは所有比較を行いD204を拒否しており、経路条件との対応も確認できます（E08）。",
+        "evidenceIds": [
+          "E06",
+          "E07",
+          "E08"
+        ]
+      },
+      "A_OK": {
+        "text": "対策：設定とログを保全し、必要な一時制限の上で例外を無効化し、全要求の所属又は共有を確認するのが修復です。",
+        "evidenceIds": []
+      },
+      "P_OK": {
+        "text": "構成や設定を変更する時、VPN内外の両経路で団体間拒否と団体内許可を試験する。認可の例外条件もレビューしてから運用へ反映する。",
+        "evidenceIds": [
+          "E06",
+          "E07",
+          "E08"
+        ]
+      },
+      "V_OK": {
+        "text": "確認：VPN内外で団体内許可・団体間拒否・匿名拒否を組み合わせ、拒否時に本文0で監査が残るか確認します（E07/E08）。確認できた返却は指定期間のD204で、全世界公開や管理権限奪取、返却後の利用までは分かりません（E09/E10）。",
+        "evidenceIds": [
+          "E07",
+          "E08",
+          "E09",
+          "E10"
+        ]
+      },
+      "C1": {
+        "text": "U17の有効ポータルセッションと正規VPN割当が存在する。成立根拠はE02・E03、又はE03・E04、又はE03・E08、又はE03・E09。",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E04",
+          "E08",
+          "E09"
+        ]
+      },
+      "C2": {
+        "text": "A団体U17へB団体の非公開D204本文を返却した。成立根拠はE04・E05、又はE05・E09。",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E09"
+        ]
+      },
+      "C3": {
+        "text": "内部IP例外で当該APIの所有団体比較を省略した。成立根拠はE06。",
+        "evidenceIds": [
+          "E06"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "別団体資料が見えたという自己申告",
+      "E02": "ポータル/VPN認証と所属・共有",
+      "E03": "正規VPN割当と対象接続の完全台帳",
+      "E04": "検証済み所属主体と実本文返却",
+      "E05": "所有/非公開/版/本文hashの台帳",
+      "E06": "稼働例外と実要求の所有比較省略",
+      "E07": "団体内/明示共有/匿名の正常閲覧要件",
+      "E08": "V31継続IF選択による経路比較",
+      "E09": "指定APIの全返却と観測範囲",
+      "E10": "ロール・healthと資料認可の区別",
+      "E11": "前日公開チラシの閲覧ノイズ"
+    }
+  }
+}

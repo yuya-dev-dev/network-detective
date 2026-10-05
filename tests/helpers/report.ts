@@ -1,7 +1,7 @@
 import { getSolution } from "../../src/scenario/load";
+import type { Solution } from "../../src/scenario/types";
 import type { Report } from "../../src/game/types";
-export function correctReport(): Report {
-  const s = getSolution();
+export function correctReport(s: Solution = getSolution()): Report {
   return {
     scopeId: s.scopeId,
     causeId: s.causeId,

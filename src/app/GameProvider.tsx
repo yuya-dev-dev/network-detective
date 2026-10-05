@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { playableScenario, getSolution } from "../scenario/load";
+import type { PlayableScenario, Solution } from "../scenario/types";
 import { gameReducer, newAttempt, type Action } from "../game/reducer";
 import { gradeReport, validateSubmission } from "../game/scoring";
 import { loadSave, persistSave, storageKey } from "../storage/localStorage";
@@ -22,9 +23,12 @@ type GameContextValue = {
   flush: () => Promise<boolean>;
 };
 const GameContext = createContext<GameContextValue | null>(null);
-export function GameProvider({ children }: { children: ReactNode }) {
+// Key this provider by scenario.id when switching cases. Queued writes retain their case key.
+export function GameProvider({ children, scenario = playableScenario, solution = getSolution() }: {
+  children: ReactNode; scenario?: PlayableScenario; solution?: Solution;
+}) {
   const [initial] = useState(() =>
-    loadSave(() => window.localStorage, playableScenario, getSolution()),
+    loadSave(() => window.localStorage, scenario, solution),
   );
   const [save, reduce] = useReducer(gameReducer, initial.save);
   const current = useRef(save);
@@ -39,7 +43,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const persist = (value = committed.current) => {
     const ok = persistSave(
       () => window.localStorage,
-      playableScenario.id,
+      scenario.id,
       value,
     );
     setSaved(ok);
@@ -70,11 +74,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
   useEffect(() => {
     const changed = (event: StorageEvent) => {
-      if (event.key !== storageKey(playableScenario.id)) return;
+      if (event.key !== storageKey(scenario.id)) return;
       const latest = loadSave(
         () => window.localStorage,
-        playableScenario,
-        getSolution(),
+        scenario,
+        solution,
       );
       if (latest.warning) setNotice(latest.warning);
       else setNotice("別のタブの進行を同期しました。");
@@ -86,7 +90,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
   const coordinated = async (operation: () => void) => {
     if (navigator.locks)
-      await navigator.locks.request(storageKey(playableScenario.id), operation);
+      await navigator.locks.request(storageKey(scenario.id), operation);
     else operation();
   };
   const dispatch = (action: Action): Promise<void> => {
@@ -99,8 +103,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       coordinated(() => {
         const latest = loadSave(
           () => window.localStorage,
-          playableScenario,
-          getSolution(),
+          scenario,
+          solution,
         );
         const base =
           savedRef.current && latest.writable ? latest.save : committed.current;
@@ -134,15 +138,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const begin = () =>
     dispatch({
       type: "NEW",
-      attempt: newAttempt(playableScenario, crypto.randomUUID()),
+      attempt: newAttempt(scenario, crypto.randomUUID()),
     });
   const submit = async (report: Report) => {
     if (current.current.activeAttempt?.phase !== "investigating") return;
-    const normalized = validateSubmission(report, playableScenario);
+    const normalized = validateSubmission(report, scenario);
     await dispatch({
       type: "SUBMIT",
       report: normalized,
-      result: gradeReport(normalized, getSolution(), playableScenario),
+      result: gradeReport(normalized, solution, scenario),
     });
   };
   const flush = async () => {
@@ -151,8 +155,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     await coordinated(() => {
       const latest = loadSave(
         () => window.localStorage,
-        playableScenario,
-        getSolution(),
+        scenario,
+        solution,
       );
       if (savedRef.current && latest.writable) committed.current = latest.save;
       ok = persist();

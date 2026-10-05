@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { playableScenario as scenario } from "../../src/scenario/load";
+import type { PlayableScenario } from "../../src/scenario/types";
 import type { Report } from "../../src/game/types";
 export const tab = (page: Page, name: string) =>
   page
@@ -10,26 +11,26 @@ export async function openReportGroup(page: Page, field: string) {
   if (!(await group.evaluate((e: HTMLDetailsElement) => e.open)))
     await group.locator(":scope > summary").click();
 }
-export async function start(page: Page) {
+export async function start(page: Page, caseId = "case01") {
   await page.goto("/");
   await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
-  await page.getByRole("button", { name: "依頼を開く" }).click();
+  await page.locator(`[data-case-id="${caseId}"]`).getByRole("button", { name: "依頼を開く" }).click();
   await page.getByRole("button", { name: "現場の調査を始める" }).click();
   await expect(tab(page, "構成")).toBeVisible();
 }
-export async function readAll(page: Page) {
+export async function readAll(page: Page, s: PlayableScenario = scenario) {
   await tab(page, "証拠").click();
-  await expect(page.locator(".evidence-card")).toHaveCount(8);
-  for (const e of [...scenario.evidence].reverse()) {
+  await expect(page.locator(".evidence-card")).toHaveCount(s.evidence.length);
+  for (const e of [...s.evidence].reverse()) {
     await page.locator(`[data-evidence-id="${e.id}"]`).click();
     await expect(
       page.getByRole("heading", { name: e.title, exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "証拠一覧へ戻る" }).click();
   }
-  await expect(page.getByText("閲覧 8/8", { exact: true })).toBeVisible();
+  await expect(page.getByText(`閲覧 ${s.evidence.length}/${s.evidence.length}`, { exact: true })).toBeVisible();
 }
-export async function fill(page: Page, report: Report) {
+export async function fill(page: Page, report: Report, s: PlayableScenario = scenario) {
   await tab(page, "報告").click();
   for (const field of [
     "scopeId",
@@ -47,7 +48,7 @@ export async function fill(page: Page, report: Report) {
   }
   for (const claim of report.claims) {
     await openReportGroup(page, "claims");
-    const label = scenario.reportOptions.claimOptions.find(
+    const label = s.reportOptions.claimOptions.find(
       (o) => o.id === claim.claimId,
     )!.label;
     const card = page
@@ -59,7 +60,7 @@ export async function fill(page: Page, report: Report) {
     for (const id of claim.evidenceIds) {
       const input = card
         .locator(".check-row")
-        .filter({ hasText: id })
+        .filter({ has: page.getByText(`${id} ${s.evidence.find(e => e.id === id)!.title}`, { exact: true }) })
         .locator("input");
       await input.check();
       await expect(input).toBeChecked();

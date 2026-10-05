@@ -11,6 +11,7 @@ export type Evidence = {
   kind: "report" | "log" | "config" | "test" | "alert";
   nodeIds: string[];
   observedAt: string;
+  observedAtLabel?: string;
   source: string;
   acquisition: "document" | "diagnostic";
   content: { blocks: Block[] };
@@ -64,3 +65,15 @@ export type Scenario = {
   solution: Solution;
 };
 export type PlayableScenario = Omit<Scenario, "solution">;
+
+export type DialogueLine = { speaker: string; text: string };
+export type Narrative = {
+  roomThought: string; requestThought: string; startThought: string;
+  tabs: Record<"topology" | "evidence" | "hypotheses" | "report", string>;
+  evidenceThoughts: Record<string, string>; reportThought: string;
+  resultThoughts: { solved: string; reconsider: string };
+  retryThought: string; brief: string;
+  characters?: { name: string; description: string }[];
+  introDialogue?: DialogueLine[];
+  resultDialogue?: { solved: DialogueLine[]; reconsider: DialogueLine[] };
+};

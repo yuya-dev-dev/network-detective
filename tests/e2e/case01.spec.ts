@@ -164,7 +164,8 @@ test("expanded panels and tab scroll positions remain intact", async ({
     .evaluateAll((nodes) =>
       nodes.map((n) => {
         const b = (n as SVGGraphicsElement).getBBox();
-        return b.x >= 0 && b.x + b.width <= 340;
+        const width = ((n as SVGGraphicsElement).ownerSVGElement as SVGSVGElement).viewBox.baseVal.width;
+        return b.x >= 0 && b.x + b.width <= width;
       }),
     );
   expect(bounds.every(Boolean)).toBe(true);
@@ -233,7 +234,7 @@ test("broken saves and storage failure are recoverable", async ({ page }) => {
     };
   });
   await page.reload();
-  await page.getByRole("button", { name: "依頼を開く" }).click();
+  await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
   await page.getByRole("button", { name: "現場の調査を始める" }).click();
   await expect(page.getByText("保存不可", { exact: true })).toBeVisible();
   await tab(page, "証拠").click();

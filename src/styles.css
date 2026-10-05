@@ -1484,3 +1484,26 @@ summary {
   grid-row: 3;
   margin-top: 8px;
 }
+
+/* Exam-style diagrams use normal topology, never solution state. */
+.map-panel { background-color:#0c131b; background-image:linear-gradient(#29384622 1px,transparent 1px),linear-gradient(90deg,#29384622 1px,transparent 1px); background-size:20px 20px; }
+.map-overview svg { max-width:none; }
+.map-caption { fill:#8facc3;font:10px ui-monospace,monospace;letter-spacing:1px; }
+.map-zone rect { fill:#15223066;stroke:#557085;stroke-width:1;stroke-dasharray:4 3; }
+.map-zone text { fill:#b4c8d8;font-size:10px; }
+.map-link { fill:none;stroke:#a9bccd;stroke-width:1.8;stroke-linejoin:round; }
+.map-link.relation { stroke-dasharray:5 4;stroke:#8498ad; }
+.map-tunnel { fill:none;stroke:#436b8588;stroke-width:10; }
+.map-link-label { fill:#d2e3ee;font-size:10px;text-anchor:middle;paint-order:stroke;stroke:#0c131b;stroke-width:4px;stroke-linejoin:round; }
+.map-node { fill:#16212c; }
+.map-node-title { fill:#eef4f9;font-size:12px;font-weight:700;text-anchor:middle; }
+.map-address { fill:#bbcfdf;font:10px ui-monospace,"Yu Gothic",sans-serif;text-anchor:middle; }
+.device-symbol { fill:none;stroke:#82b8d2;stroke-width:1.3; }
+.map-note { fill:#adc4d6;font-size:9px;text-anchor:middle; }
+.map-panel g[role=button]:focus-visible .map-hit { stroke:none; }
+.conversation-line strong { color:#72d9ec; }
+.conversation-line { min-height:100px; margin-top:10px; }
+.conversation-line p { font-size:1rem; }
+.conversation-controls { display:flex;gap:16px;align-items:center;justify-content:flex-end; }
+.conversation-controls span { color:#a7b3c2;font-size:0.85rem; }
+.case-files { display:grid;gap:8px; }

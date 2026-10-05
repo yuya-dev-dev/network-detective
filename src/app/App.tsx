@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { playableScenario as scenario, getSolution } from "../scenario/load";
-import narrative from "../data/narrative.json";
-import { useGame } from "./GameProvider";
+import { cases, caseNumber, caseHash, caseIdFromHash, findCase, type CaseEntry } from "../scenario/registry";
+import type { PlayableScenario } from "../scenario/types";
+import { GameProvider, useGame } from "./GameProvider";
+import { CaseList } from "../ui/CaseList";
+import { Dialogue } from "../ui/Dialogue";
 import { useOffline } from "../pwa/register";
 import {
   Dialog,
@@ -25,8 +27,10 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "hypotheses", label: "仮説" },
   { id: "report", label: "報告" },
 ];
-function readView(): View {
-  const [screen, part, evidence] = location.hash.slice(1).split("/");
+function readView(scenario: PlayableScenario): View {
+  const parts = location.hash.slice(1).split("/");
+  if (caseIdFromHash(location.hash)) parts.shift();
+  const [screen, part, evidence] = parts;
   if (screen === "investigation")
     return {
       screen,
@@ -47,7 +51,30 @@ function readView(): View {
     evidenceId: null,
   };
 }
+type Selection = { id: string; token: number } | null;
 export default function App() {
+  const [selectedId, select] = useState(() => caseIdFromHash(location.hash) ?? "case01");
+  const [selection, request] = useState<Selection>(null);
+  useEffect(() => {
+    const changed = () => {
+      const id = caseIdFromHash(location.hash);
+      // Unprefixed case routes are always case01; title/list retain the current provider.
+      if (id) select(id);
+      else if (/^#(brief|investigation|result)(\/|$)/.test(location.hash)) select("case01");
+    };
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
+  }, []);
+  const entry = findCase(selectedId) ?? cases[0];
+  return <GameProvider key={entry.scenario.id} scenario={entry.scenario} solution={entry.solution}>
+    <CaseApp entry={entry} selection={selection} consumed={() => request(null)} choose={id => { select(id); request({ id, token: Date.now() }); }} />
+  </GameProvider>;
+}
+function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; selection: Selection; consumed: () => void; choose: (id: string) => void }) {
+  const { scenario, narrative, solution } = entry;
+  const read = () => readView(scenario);
+  const hash = (route: string) => caseHash(scenario.id, route);
+  const number = caseNumber(scenario.id);
   const { save, saved, notice, dispatch, begin, flush } = useGame();
   const offline = useOffline();
   const bgm = useBgm();
@@ -68,10 +95,10 @@ export default function App() {
       <small>{bgm.enabled ? "ON" : "OFF"}</small>
     </button>
   );
-  const [view, setView] = useState<View>(readView),
+  const [view, setView] = useState<View>(read),
     [glossary, showGlossary] = useState(false),
     [hints, showHints] = useState(false);
-  const [thought, think] = useState(() => narrative.tabs[readView().tab]);
+  const [thought, think] = useState(() => narrative.tabs[read().tab]);
   const positions = useRef<Record<string, number>>({});
   const previousHash = useRef(location.hash || "#list");
   const shell = useRef<HTMLDivElement>(null);
@@ -103,7 +130,7 @@ export default function App() {
       positions.current[previousHash.current] = window.scrollY;
       const key = location.hash || "#list";
       previousHash.current = key;
-      setView(readView());
+      setView(read());
       requestAnimationFrame(() =>
         requestAnimationFrame(() =>
           window.scrollTo(0, positions.current[key] ?? 0),
@@ -121,26 +148,27 @@ export default function App() {
       !attempt
     ) {
       history.replaceState(null, "", "#list");
-      setView(readView());
+      setView(read());
     } else if (
       locked &&
       (view.screen === "investigation" || view.screen === "brief")
     ) {
-      history.replaceState(null, "", "#result");
-      setView(readView());
+      history.replaceState(null, "", hash("result"));
+      setView(read());
     } else if (view.screen === "result" && !locked) {
       history.replaceState(
         null,
         "",
-        attempt?.phase === "brief" ? "#brief" : "#investigation/topology",
+        attempt?.phase === "brief" ? hash("brief") : hash("investigation/topology"),
       );
-      setView(readView());
+      setView(read());
     }
     if (view.screen === "result" && attempt?.phase === "submitted")
       dispatch({ type: "COMPLETE" });
   }, [view.screen, attempt?.phase]);
-  const navigate = (hash: string) => {
-    if (location.hash !== hash) location.hash = hash;
+  const navigate = (target: string) => {
+    const next = target === "#list" || target === "#title" ? target : hash(target.slice(1));
+    if (location.hash !== next) location.hash = next;
   };
   const open = (id: string) => {
     dispatch({ type: "OPEN", evidenceId: id });
@@ -168,7 +196,19 @@ export default function App() {
             : "#investigation/topology",
       );
   };
-  const records = save.records.filter((r) => r.scenarioId === scenario.id);
+  const consumedToken = useRef<number | null>(null);
+  useEffect(() => {
+    if (!selection || selection.id !== scenario.id || consumedToken.current === selection.token) return;
+    consumedToken.current = selection.token;
+    void (async () => {
+      if (!attempt) await startNew(); else resume();
+      consumed();
+    })();
+  }, [selection]);
+  const selectCase = async (id: string) => {
+    if (id === scenario.id) resume();
+    else if ((!attempt && save.records.length === 0) || await flush()) choose(id);
+  };
   const dockText =
     view.screen === "result"
       ? narrative.resultThoughts[
@@ -244,10 +284,10 @@ export default function App() {
                 <span aria-hidden="true">↗</span>
               </button>
               <p className="title-footnote">
-                第1事件 · 約10分 · 中断して再開できます
+                全6事件 · 中断して再開できます
               </p>
             </div>
-            <span className="title-edition">A NETWORK MYSTERY / CASE 01</span>
+            <span className="title-edition">A NETWORK MYSTERY / 6 CASE FILES</span>
           </section>
         )}
         {view.screen === "list" && (
@@ -257,41 +297,9 @@ export default function App() {
                 <span className="eyebrow">CASE FILES</span>
                 <h1>受信した依頼</h1>
               </div>
-              <span className="stamp">01 FILE</span>
+              <span className="stamp">{cases.length} FILES</span>
             </div>
-            <article className="case-card">
-              <div className="case-meta">
-                <span>CASE 01</span>
-                <span>NETWORK</span>
-                <span>初級 · 約10分</span>
-              </div>
-              <h2>{scenario.title}</h2>
-              <p>構成と記録を突き合わせて、通信障害の原因を調べる。</p>
-              <div className="case-progress">
-                {attempt
-                  ? locked
-                    ? "報告済み"
-                    : attempt.phase === "brief"
-                      ? "依頼を確認中"
-                      : `調査中 · 証拠 ${attempt.openedEvidenceIds.length}/8`
-                  : "未着手"}
-              </div>
-              <button className="primary wide" onClick={resume}>
-                {!attempt
-                  ? "依頼を開く"
-                  : locked
-                    ? "結果と解説を見る"
-                    : "続きから調査する"}{" "}
-                <span>→</span>
-              </button>
-              {records.length > 0 && (
-                <div className="record-summary">
-                  <span>初回 {records[0].result.total}点</span>
-                  <span>最新 {records[records.length - 1].result.total}点</span>
-                  <span>{records.length}回の報告</span>
-                </div>
-              )}
-            </article>
+            <CaseList selectedId={scenario.id} currentSave={save} choose={id => void selectCase(id)} />
             <p className="offline-status" role="status">
               <span className={`dot ${offline.ready ? "ready" : ""}`} />
               {offline.ready
@@ -327,12 +335,13 @@ export default function App() {
         )}
         {view.screen === "brief" && attempt && (
           <section>
-            <span className="eyebrow">CASE 01 / REQUEST</span>
+            <span className="eyebrow">CASE {number} / REQUEST</span>
             <h1>{scenario.title}</h1>
             <article className="paper-card briefing">
               <span className="stamp">調査依頼</span>
               <p>{scenario.brief}</p>
             </article>
+            {narrative.introDialogue && <Dialogue lines={narrative.introDialogue} title="依頼人との会話" />}
             <article className="paper-card">
               <h2>普段の動作</h2>
               <ul>
@@ -359,13 +368,14 @@ export default function App() {
         {view.screen === "investigation" && attempt && !locked && (
           <>
             <div className="investigation-toolbar">
-              <span>CASE 01 · 調査中</span>
+              <span>CASE {number} · 調査中</span>
               <button onClick={() => showHints(true)}>
                 ヒント {attempt.hintLevel}/3
               </button>
             </div>
             <Investigation
               scenario={scenario}
+              narrative={narrative}
               tab={view.tab}
               evidenceId={view.evidenceId}
               open={open}
@@ -393,7 +403,8 @@ export default function App() {
           ) : (
             <ResultView
               scenario={scenario}
-              solution={getSolution()}
+              solution={solution}
+              narrative={narrative}
               attempt={attempt}
               retry={startNew}
               list={() => navigate("#list")}

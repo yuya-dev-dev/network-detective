@@ -45,7 +45,7 @@ try {
   await capture("01-title");
   await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
   await capture("02-list");
-  await page.getByRole("button", { name: "依頼を開く" }).click();
+  await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
   await capture("03-brief");
   await page.getByRole("button", { name: "現場の調査を始める" }).click();
   await capture("04-topology");
