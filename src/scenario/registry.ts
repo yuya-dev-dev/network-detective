@@ -2,8 +2,9 @@ import firstNarrative from "../data/narrative.json";
 import { assertScenario } from "./validate";
 import { assertNarrative } from "./narrative";
 import type { Narrative, PlayableScenario, Solution } from "./types";
+import { modeForCase, type GameMode } from "./modes";
 
-export type CaseEntry = { scenario: PlayableScenario; narrative: Narrative; solution: Solution };
+export type CaseEntry = { scenario: PlayableScenario; narrative: Narrative; solution: Solution; mode: GameMode };
 const data = import.meta.glob("../data/case*.json", { eager: true, import: "default" });
 const narratives = import.meta.glob("../data/narratives/case*.json", { eager: true, import: "default" });
 export const cases: CaseEntry[] = Object.values(data).map(value => {
@@ -11,7 +12,7 @@ export const cases: CaseEntry[] = Object.values(data).map(value => {
   const { solution, ...scenario } = value;
   const narrative = value.id === "case01" ? firstNarrative : narratives[`../data/narratives/${value.id}.json`];
   assertNarrative(narrative, scenario);
-  return { scenario, solution, narrative };
+  return { scenario, solution, narrative, mode: modeForCase(scenario.id) };
 }).sort((a, b) => a.scenario.id.localeCompare(b.scenario.id));
 export const findCase = (id: string) => cases.find(entry => entry.scenario.id === id);
 export const caseNumber = (id: string) => id.slice(4);

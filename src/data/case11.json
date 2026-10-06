@@ -1,0 +1,1369 @@
+{
+  "schemaVersion": 1,
+  "id": "case11",
+  "revision": 1,
+  "title": "野鳥観測窓口、静かな通知一覧",
+  "type": "security",
+  "difficulty": 3,
+  "estimatedMinutes": 22,
+  "prerequisites": [
+    "認証ログ・集計軸・重複排除の概要（用語辞典で確認できます）"
+  ],
+  "brief": "野鳥観測の共同記録窓口で、原記録に多数の利用者IDへのログイン失敗があるのに、担当者の通知一覧は空のままです。観測会の投稿は正常ですが、編集担当は公開前の下書きが読まれたのか確かめてから説明したいと話しています。正常時は、同じ送信元から五分内に八以上の異なるIDへパスワード失敗があれば、認証ノードをまたいで通知する必要があります。一方、同じNAT出口を使う観測会の正規ログインは続けなければなりません。原記録、取込品質、集計設定、認証と業務の結果を読み、通知されない理由と確認できた範囲を報告してください。記録を保全し、正常な投稿を守る暫定対応と検知の確認計画をお願いします。",
+  "context": {
+    "baseline": [
+      "利用者は公開ログイン窓口から自分の下書きを編集する。同じNAT出口から多数がログインする正常な観測会も維持する。"
+    ],
+    "assumptions": [
+      "認証失敗を保存し、五分間に同一sourceから八以上の異なるuser_idへpassword失敗があれば、認証ノードを横断して担当者へ通知する。ログイン成功・既認証操作はこの失敗数に含めない。通知は調査を始めるための条件で、侵入や人物の悪意を断定する判定ではない。",
+      "AUTH-A/Bは負荷分散され、同じ登録利用者とポリシーを持つ。password成功後も機密下書きにはMFAが必要。IDごと五分内五回失敗で十五分ロックする機能は正しく稼働しているが、複数IDへ分散する試行の通知とは別。MFAも失敗群の集計を置き換えない。",
+      "各試行は一つのrequest_idで識別する。入口、認証、収集の複数行は同じ試行に由来する記録。password_resultの認証結果をrequest_idで重複排除して数える。source IPは入口のTLS実接続から取得し、クライアント自己申告のX-Forwarded-Forは採用しない。IPは個人の身元ではない。",
+      "パスワードの値や同一値照合タグはないため、同じパスワードを試したとは確定できない。14:00〜14:10、JST同期の完全snapshotに限って判断する。全12資料は初期公開・任意順で、固定診断は保全データを再集計した記録。プレイヤーが本番の認証や監視を操作するものではない。",
+      "資料時刻（observedAt）は、その資料の状態・範囲を観測した時刻。全件資料は収録終端、複数イベントは最後のイベント以後を示す。個別の出来事の時刻は本文に残し、「取得」は資料を調査へ揃えた時刻を示す。",
+      "L06/L07は認証済み業務の関係で、失敗試行が下書き業務へ到達したという線ではない。LBの認証ノード振分けとNATの送信元変換を分ける。署名検証の線は本件に追加しない。\n拡大と文字ではnodeId、送信元変換、観測位置を示す。観測点はTLS入口、AUTH-A/Bの結果、収集の受領、SIEMの集計と通知生成。線の太さや色で正誤を教えない。"
+    ],
+    "snapshotTime": "2026-10-05T14:10:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_FIELD",
+        "label": "観測会端末群",
+        "kind": "client",
+        "addresses": [
+          "10.75.10.0/24",
+          "境界：正規利用者群"
+        ]
+      },
+      {
+        "id": "N_NAT",
+        "label": "観測会の出口",
+        "kind": "gateway",
+        "addresses": [
+          "198.51.100.75",
+          "境界：正常NAT"
+        ]
+      },
+      {
+        "id": "N_EXT",
+        "label": "調査対象source",
+        "kind": "service",
+        "addresses": [
+          "203.0.113.75",
+          "境界：別送信元"
+        ]
+      },
+      {
+        "id": "N_EDGE",
+        "label": "ログイン入口",
+        "kind": "gateway",
+        "addresses": [
+          "login.bird.example.test",
+          "192.0.2.75",
+          "TLS終端・LB",
+          "境界：公開入口"
+        ]
+      },
+      {
+        "id": "N_A",
+        "label": "AUTH-A",
+        "kind": "auth",
+        "addresses": [
+          "10.75.20.15",
+          "境界：認証プール"
+        ]
+      },
+      {
+        "id": "N_B",
+        "label": "AUTH-B",
+        "kind": "auth",
+        "addresses": [
+          "10.75.20.16",
+          "境界：認証プール"
+        ]
+      },
+      {
+        "id": "N_APP",
+        "label": "下書き業務",
+        "kind": "service",
+        "addresses": [
+          "10.75.30.15",
+          "境界：認証済み業務"
+        ]
+      },
+      {
+        "id": "N_COL",
+        "label": "ログ収集",
+        "kind": "monitor",
+        "addresses": [
+          "10.75.40.15",
+          "境界：監視"
+        ]
+      },
+      {
+        "id": "N_SIEM",
+        "label": "相関・通知",
+        "kind": "monitor",
+        "addresses": [
+          "10.75.50.15",
+          "境界：監視"
+        ]
+      },
+      {
+        "id": "N_DESK",
+        "label": "担当者端末",
+        "kind": "client",
+        "addresses": [
+          "10.75.60.25",
+          "境界：監視担当"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L01",
+        "from": "N_FIELD",
+        "to": "N_NAT",
+        "label": "観測会端末の出口経路、NAT変換（利用者経路の実線）"
+      },
+      {
+        "id": "L02",
+        "from": "N_NAT",
+        "to": "N_EDGE",
+        "label": "HTTPS/TCP443、観測会ログイン（要求の実線）"
+      },
+      {
+        "id": "L03",
+        "from": "N_EXT",
+        "to": "N_EDGE",
+        "label": "HTTPS/TCP443、別sourceの要求（要求の実線）"
+      },
+      {
+        "id": "L04",
+        "from": "N_EDGE",
+        "to": "N_A",
+        "label": "HTTPS/TCP8443、認証への負荷分散（要求の実線）"
+      },
+      {
+        "id": "L05",
+        "from": "N_EDGE",
+        "to": "N_B",
+        "label": "HTTPS/TCP8443、認証への負荷分散（要求の実線）"
+      },
+      {
+        "id": "L06",
+        "from": "N_A",
+        "to": "N_APP",
+        "label": "HTTPS/TCP443、認証済み業務関係（業務の破線）"
+      },
+      {
+        "id": "L07",
+        "from": "N_B",
+        "to": "N_APP",
+        "label": "HTTPS/TCP443、認証済み業務関係（業務の破線）"
+      },
+      {
+        "id": "L08",
+        "from": "N_EDGE",
+        "to": "N_COL",
+        "label": "HTTPS/TCP443、入口ログ転送（監視の点線）"
+      },
+      {
+        "id": "L09",
+        "from": "N_A",
+        "to": "N_COL",
+        "label": "HTTPS/TCP443、認証結果転送（監視の点線）"
+      },
+      {
+        "id": "L10",
+        "from": "N_B",
+        "to": "N_COL",
+        "label": "HTTPS/TCP443、認証結果転送（監視の点線）"
+      },
+      {
+        "id": "L11",
+        "from": "N_COL",
+        "to": "N_SIEM",
+        "label": "HTTPS/TCP443、収集記録の転送（監視の点線）"
+      },
+      {
+        "id": "L12",
+        "from": "N_SIEM",
+        "to": "N_DESK",
+        "label": "HTTPS/TCP443、通知配送（通知の点破線）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "編集担当からの報告",
+      "kind": "report",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_DESK"
+      ],
+      "source": "編集担当の監視報告",
+      "observedAt": "2026-10-05T14:09:00+09:00",
+      "observedAtLabel": "資料時刻・14:09:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "原記録に普段と違う多数IDへのログイン失敗があるが、担当の通知一覧は0件。観測会の投稿は正常。公開前のデータが読まれたかは、調べてから報告したい。"
+          },
+          {
+            "type": "text",
+            "body": "通知一覧が空であることだけで、試行の不存在や侵入成功を判断しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "失敗通知とIDロックの正常要件",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SIEM"
+      ],
+      "source": "通知正常要件・認証保護要件",
+      "observedAt": "2026-10-05T14:00:00+09:00",
+      "observedAtLabel": "資料時刻・14:00:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "通知：",
+              "event=password_result / result=fail",
+              "同一source / window=5m",
+              "distinct user_id >=8",
+              "認証ノード横断で集計し、担当者へ警報",
+              "原ログ保存・成功除外・request_id重複排除を維持",
+              "IDロック（別の保護）：",
+              "同一IDのpassword失敗 >=5 / window=5m",
+              "lock=15m"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "アラートは調査開始の条件で、身元や侵入成功を認定する通知ではない。IDロックを正しく動かすことと、複数IDへの失敗を通知することは別の要件。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "調査群の認証結果全件",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_A",
+        "N_B"
+      ],
+      "source": "調査期間の認証結果監査",
+      "observedAt": "2026-10-05T14:10:00+09:00",
+      "observedAtLabel": "資料時刻・14:10:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "table",
+            "columns": [
+              "時刻",
+              "request_id",
+              "user_id",
+              "source",
+              "認証ノード",
+              "event",
+              "result",
+              "session_issued"
+            ],
+            "rows": [
+              [
+                "14:01:00",
+                "Q01",
+                "b01",
+                "203.0.113.75",
+                "AUTH-A",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:01:20",
+                "Q02",
+                "b02",
+                "203.0.113.75",
+                "AUTH-B",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:01:40",
+                "Q03",
+                "b03",
+                "203.0.113.75",
+                "AUTH-A",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:02:00",
+                "Q04",
+                "b04",
+                "203.0.113.75",
+                "AUTH-B",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:02:20",
+                "Q05",
+                "b05",
+                "203.0.113.75",
+                "AUTH-A",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:02:40",
+                "Q06",
+                "b06",
+                "203.0.113.75",
+                "AUTH-B",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:03:00",
+                "Q07",
+                "b07",
+                "203.0.113.75",
+                "AUTH-A",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:03:20",
+                "Q08",
+                "b08",
+                "203.0.113.75",
+                "AUTH-B",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:03:40",
+                "Q09",
+                "b09",
+                "203.0.113.75",
+                "AUTH-A",
+                "password_result",
+                "fail",
+                "false"
+              ],
+              [
+                "14:04:00",
+                "Q10",
+                "b10",
+                "203.0.113.75",
+                "AUTH-B",
+                "password_result",
+                "fail",
+                "false"
+              ]
+            ]
+          },
+          {
+            "type": "text",
+            "body": "パスワード値も、同じ値を使ったか照合できるタグも記録しない。各行は別request_idの認証結果。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "入口要求と実送信元",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_EDGE"
+      ],
+      "source": "TLS入口の全要求記録",
+      "observedAt": "2026-10-05T14:10:00+09:00",
+      "observedAtLabel": "資料時刻・14:10:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "table",
+            "columns": [
+              "request_id",
+              "入口件数",
+              "transport_source",
+              "振分け先"
+            ],
+            "rows": [
+              [
+                "Q01",
+                "1",
+                "203.0.113.75",
+                "AUTH-A"
+              ],
+              [
+                "Q02",
+                "1",
+                "203.0.113.75",
+                "AUTH-B"
+              ],
+              [
+                "Q03",
+                "1",
+                "203.0.113.75",
+                "AUTH-A"
+              ],
+              [
+                "Q04",
+                "1",
+                "203.0.113.75",
+                "AUTH-B"
+              ],
+              [
+                "Q05",
+                "1",
+                "203.0.113.75",
+                "AUTH-A"
+              ],
+              [
+                "Q06",
+                "1",
+                "203.0.113.75",
+                "AUTH-B"
+              ],
+              [
+                "Q07",
+                "1",
+                "203.0.113.75",
+                "AUTH-A"
+              ],
+              [
+                "Q08",
+                "1",
+                "203.0.113.75",
+                "AUTH-B"
+              ],
+              [
+                "Q09",
+                "1",
+                "203.0.113.75",
+                "AUTH-A"
+              ],
+              [
+                "Q10",
+                "1",
+                "203.0.113.75",
+                "AUTH-B"
+              ]
+            ]
+          },
+          {
+            "type": "text",
+            "body": "調査群は入口でも10件。sourceは実TLS接続の値で、自己申告XFFは採用しない。正常観測会のsource=198.51.100.75は別群QF01〜QF13。この入口ログだけでは認証の成否を数えない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "稼働中の通知rule",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SIEM"
+      ],
+      "source": "稼働rule R_ACCOUNTの保全",
+      "observedAt": "2026-10-05T14:00:00+09:00",
+      "observedAtLabel": "資料時刻・14:00:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "rule=R_ACCOUNT",
+              "filter：event=password_result and result=fail",
+              "dedup=request_id",
+              "group=[source,user_id,auth_node]",
+              "window=5m",
+              "count >=5 → notify",
+              "distinct_user通知rule：なし",
+              "アラート抑制時間：なし"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "これは正常要件とは別の、現在稼働しているruleの値。groupは同じ値としてまとめる項目、countはそのまとまりの件数を表す。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "収集の品質と原行数",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_COL"
+      ],
+      "source": "全イベント取込・品質検査",
+      "observedAt": "2026-10-05T14:05:00+09:00",
+      "observedAtLabel": "資料時刻・14:05:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "対象：Q01〜Q10",
+              "EDGE requestレコード：10行",
+              "AUTH password_result：10行",
+              "取込receipt：10行",
+              "raw row count：30",
+              "全認証イベント：取込済み",
+              "delay_max=2s",
+              "dropped=0",
+              "time_parse=JST",
+              "request_id / event_type：保持"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "30は段階の違う原telemetryの行数で、認証試行30回を表す数値ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "保全snapshotの固定再集計",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "nodeIds": [
+        "N_SIEM"
+      ],
+      "source": "同じ保全データのfilter・重複排除・再集計",
+      "observedAt": "2026-10-05T14:10:00+09:00",
+      "observedAtLabel": "資料時刻・14:10:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "E02定義によるfilter/dedup",
+              "source=203.0.113.75",
+              "window=14:00〜14:05",
+              "result=fail",
+              "unique_requests=10",
+              "distinct_users=10",
+              "auth_nodes=2",
+              "R_ACCOUNTの各bucket(source,user,node)：count=1",
+              "R_ACCOUNT通知生成：0"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "14:10の保全snapshotを読み直した固定再集計で、対象windowは14:00〜14:05。本番ruleを修正した後の稼働ログではない。正常な別sourceの対照はE09。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "認証と業務の成立範囲",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_A",
+        "N_B",
+        "N_APP"
+      ],
+      "source": "調査request・主体の認証及び業務監査全件",
+      "observedAt": "2026-10-05T14:10:00+09:00",
+      "observedAtLabel": "資料時刻・14:10:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "観測期間：14:00〜14:10",
+              "対象request：Q01〜Q10",
+              "対象user_id：b01〜b10",
+              "password：全件fail",
+              "MFA challenge：なし",
+              "session/token発行：0",
+              "これらrequest/主体による下書きread/export：0"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "この時刻・要求・主体範囲では侵入成功を確認していない。以前や他経路の侵害まで一括で否定する資料ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "正常観測会の対照",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_NAT",
+        "N_A",
+        "N_B"
+      ],
+      "source": "正常観測会の認証・NAT対照監査",
+      "observedAt": "2026-10-05T14:05:00+09:00",
+      "observedAtLabel": "資料時刻・14:05:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "source=198.51.100.75",
+              "参加者：f01〜f10の10人",
+              "password success：10件",
+              "MFA success：10件",
+              "password fail：f02/f04/f07 各1回、計3件",
+              "失敗した3人：その後に本人成功",
+              "全password試行：QF01〜QF13、計13件",
+              "認証ノード：AUTH-A/B双方",
+              "password試行QF01〜QF13のraw telemetry：39行",
+              "  EDGE request 13行 / AUTH password_result 13行 / 取込receipt 13行",
+              "  別のMFA successイベント10件はこの39行に含まない",
+              "E02定義の再集計：distinct_failed_users=3",
+              "警報条件：未達"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "認証成功やMFAのイベントをpassword失敗に加算しない。39行は13件のpassword試行に対応する三段階の記録で、MFAを含む全イベント総数ではない。多数IDが同じNATから利用することだけで、不正と判断する対照ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "調査制約と暫定対応の予定",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_DESK"
+      ],
+      "source": "承認試験予定・調査対応条件",
+      "observedAt": "2026-10-05T14:06:00+09:00",
+      "observedAtLabel": "資料時刻・14:06:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "当時の承認負荷試験・認証試験の一覧は0件。source=203.0.113.75の自動試行は正規予定に登録されていない。"
+          },
+          {
+            "type": "text",
+            "body": "原記録保全後、当該sourceへの暫定レート制限と監視を追加できる。正常NAT=198.51.100.75の群は維持する。恒久的な安全判断をIPだけで行わず、跨ID相関、MFA、リスク認証を継続評価する。全利用者ロックとlog削除は不要。"
+          },
+          {
+            "type": "text",
+            "body": "IPの所有者や悪意は未特定。「未承認の多数ID認証試行として調査対象」として扱う。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "title": "録音添付の容量通知",
+      "kind": "alert",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_COL"
+      ],
+      "source": "別の投稿端末の容量連絡",
+      "observedAt": "2026-10-05T13:15:00+09:00",
+      "observedAtLabel": "資料時刻・13:15:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "13:10に音声観測録音の添付容量通知。対象は投稿端末REC75のみで、13:15に解消。認証イベントと通知配送の依存先ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "title": "前日の通知配信試験",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_DESK"
+      ],
+      "source": "別合成事象の配信試験・当日health情報",
+      "observedAt": "2026-10-05T14:10:00+09:00",
+      "observedAtLabel": "資料時刻・14:10:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T14:10:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "前日2026-10-04の16:00、別の合成事象AL_TESTが担当者端末で受信成功。付記した当日2026-10-05の14:10現在の情報は通知API health=200、担当登録active。"
+          },
+          {
+            "type": "text",
+            "body": "過去の配信成功で、今日のR_ACCOUNTの発報条件が成立したとは言えない。別合成事象を今日の調査群の通知として数えない。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_DELIVERY",
+      "label": "生成後の通知配送停止",
+      "description": "条件に合う通知は生成されたが、担当者端末への配送が止まり、一覧へ到達しなかった"
+    },
+    {
+      "id": "H_CLOCK",
+      "label": "サーバ時刻のずれ",
+      "description": "サーバの時刻がずれ、調査群の失敗が五分外に離れて記録されたため通知条件を満たさなかった"
+    },
+    {
+      "id": "H_GROUP",
+      "label": "ID・node別に分割する通知rule",
+      "description": "複数IDを横断する通知要件に対し、現在ruleがuserと認証nodeごとに失敗を分割し、通知閾値に達しない"
+    },
+    {
+      "id": "H_NORMAL",
+      "label": "正常NAT成功の失敗誤認",
+      "description": "正常観測会の同じNATからの成功ログインを失敗と誤認し、存在しない異常について通知を待っていた"
+    },
+    {
+      "id": "H_LOSS",
+      "label": "AUTH-Bの収集欠落",
+      "description": "AUTH-Bの失敗結果が収集へ届かず、認証片側の記録が欠けたため通知を生成できなかった"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_NAT",
+        "label": "観測会全員の認証拒否",
+        "description": "共同観測会の全員が認証を拒否され、正常な投稿を続けられなかった範囲として報告する。NAT群全体を停止状態と扱う"
+      },
+      {
+        "id": "S_ATTEMPT",
+        "label": "10IDの失敗と対象範囲の未成功",
+        "description": "203.0.113.75から10IDへ各1回password失敗。14:00〜14:10のQ01〜Q10では成功sessionや業務readを確認していない範囲とする"
+      },
+      {
+        "id": "S_BREACH",
+        "label": "十人の全データ流出",
+        "description": "十人のIDへの失敗をデータ取得の成立として扱い、十人の全データが外部へ流出した被害範囲として報告する"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_DELIVERY",
+        "label": "生成後の通知配送停止",
+        "description": "条件に合う通知は生成されたが、担当者端末への配送が止まり、一覧へ到達しなかった"
+      },
+      {
+        "id": "H_CLOCK",
+        "label": "サーバ時刻のずれ",
+        "description": "サーバの時刻がずれ、調査群の失敗が五分外に離れて記録されたため通知条件を満たさなかった"
+      },
+      {
+        "id": "H_GROUP",
+        "label": "ID・node別に分割する通知rule",
+        "description": "複数IDを横断する通知要件に対し、現在ruleがuserと認証nodeごとに失敗を分割し、通知閾値に達しない"
+      },
+      {
+        "id": "H_NORMAL",
+        "label": "正常NAT成功の失敗誤認",
+        "description": "正常観測会の同じNATからの成功ログインを失敗と誤認し、存在しない異常について通知を待っていた"
+      },
+      {
+        "id": "H_LOSS",
+        "label": "AUTH-Bの収集欠落",
+        "description": "AUTH-Bの失敗結果が収集へ届かず、認証片側の記録が欠けたため通知を生成できなかった"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "F_MANY",
+        "label": "同じNAT出口なら攻撃と断定",
+        "description": "同じNAT出口から十人がログインした事実だけで、利用者群の攻撃を確定できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_NOSESSION",
+        "label": "対象要求のsession・業務記録",
+        "description": "14:00〜14:10のQ01〜Q10には、成功session発行や業務読取が観測されていない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_SPRAY",
+        "label": "同一パスワードの試行と断定",
+        "description": "十試行への失敗ログから、すべて同じパスワードを使った試行だったと確定できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_PATTERN",
+        "label": "五分内10試行・10IDの対応",
+        "description": "五分内の同一sourceのpassword失敗は重複を除いて10試行・10IDで、2認証nodeに跨る",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_ROWS",
+        "label": "telemetry30行を30試行と計上",
+        "description": "原telemetryが30行あるため、調査群の認証試行も30回と数えることができる",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C_RULE",
+        "label": "正常通知要件と稼働rule",
+        "description": "通知要件のsource単位8IDと、稼働ruleのsource/user/node単位5失敗は集計軸・閾値が異なる",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R_HIDE",
+        "label": "全員ロックとログ削除",
+        "description": "全利用者をロックして投稿を止め、原ログと監視設定の履歴を削除する。過去記録を残さず通知一覧を整理した状態で窓口の運用を作り直す"
+      },
+      {
+        "id": "R_CORRELATE",
+        "label": "保全・跨ID通知と正常業務維持",
+        "description": "原ログ・設定・取込品質を保全し、当該sourceへ暫定制限と調査を行う。跨ID・跨node通知を追加してIDロックを維持し、正常観測会を続け、対象範囲では侵入成功未確認と報告する"
+      },
+      {
+        "id": "R_THRESHOLD",
+        "label": "IDロック閾値を四回へ変更",
+        "description": "現在のIDロック閾値を五回から四回へ下げて対処する。source・user・nodeの集計軸は変えず、利用者単位のロックを厳しくしたことを多数ID失敗への通知改善とする"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_MFAONLY",
+        "label": "MFA表示で失敗監視を廃止",
+        "description": "MFA有効の表示を安全判定にし、password失敗の監視と跨ID相関を廃止する。多要素認証があることを理由に、原失敗ログと検知要件の継続確認を運用から外す"
+      },
+      {
+        "id": "P_TEST",
+        "label": "異常・正常対照と取込回帰試験",
+        "description": "複数ID・複数nodeの失敗と同NAT正規成功を対照にし、遅延・重複・時刻を回帰確認する。MFA・リスク認証と原ログ保管、監視応答手順を定期的に点検する"
+      },
+      {
+        "id": "P_IP",
+        "label": "共有IP利用者を恒久拒否",
+        "description": "NAT配下で同じ出口を使う利用者をすべて危険とみなし、共同観測会を恒久的に拒否する。利用者ごとの認証結果や正規予定は評価せず、共有IPを利用禁止の条件にする"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_PING",
+        "label": "ping応答で監視完了判定",
+        "description": "監視サーバへのpingが返ることを確認し、監視と通知が機能する判定にする。集計設定、イベント取込、通知生成や担当受信は追加で試験せず接続確認で完了とする"
+      },
+      {
+        "id": "V_COMPARE",
+        "label": "通知・正常対照と品質の確認",
+        "description": "保全Q群が1事象として通知され担当へ届き、正常QF群が誤警報にならず同ID繰返しロックも続くことを確認する。filter・dedup・source・時刻・全node取込と正常投稿を確認する"
+      },
+      {
+        "id": "V_ZERO",
+        "label": "通知ゼロで安全判定",
+        "description": "通知一覧がゼロ件であることを確認し、それを安全と対処完了の判定にする。原失敗群や集計条件を再試験せず、通知が出ない状態を正常運用として採用する"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "原記録の行数と、認証試行の数を分ける。認証結果のeventとrequest_idで、重複して数えていないか確認する。",
+      "evidenceIds": [
+        "E03",
+        "E04",
+        "E06"
+      ]
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "source・request・user・認証nodeを対応させ、五分間に異なる何件のIDが失敗したかを見る。成功は失敗へ足さない。",
+      "evidenceIds": [
+        "E02",
+        "E05",
+        "E07"
+      ]
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "通知要件と現在ruleのgroup・閾値を比べる。正常NATの対照と、session/業務readの成立範囲を別々に確認する。",
+      "evidenceIds": [
+        "E08",
+        "E09",
+        "E10"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "SIEM",
+      "definition": "複数の機器等のセキュリティ記録を集め、分析・相関・通知に用いる仕組み"
+    },
+    {
+      "term": "相関分析",
+      "definition": "別の記録の条件や識別子を関連付け、単独では見えないまとまりを調べる方法"
+    },
+    {
+      "term": "ロックアウト",
+      "definition": "条件に合う認証失敗等が続いたとき、一定の利用を制限する保護"
+    },
+    {
+      "term": "MFA",
+      "definition": "複数の認証要素で本人確認を強化する仕組み。監査や検知の代わりではない"
+    },
+    {
+      "term": "NAT",
+      "definition": "通信のアドレスを変換する仕組み。複数の利用者が同じ出口IPを使う場合がある"
+    },
+    {
+      "term": "LB",
+      "definition": "複数の処理ノードへ要求を分け、負荷を分散する仕組み"
+    },
+    {
+      "term": "重複排除",
+      "definition": "同じ出来事に由来する複数記録を識別して、一回として数える処理"
+    },
+    {
+      "term": "group",
+      "definition": "共通する条件の値を持つ記録をまとめる集計単位"
+    },
+    {
+      "term": "distinct",
+      "definition": "重複を除いた異なる値の数を数える考え方"
+    },
+    {
+      "term": "レート制限",
+      "definition": "一定の期間に受け付ける要求の量などを制限する対処"
+    },
+    {
+      "term": "password spray",
+      "definition": "少数のパスワード候補を多数IDへ試す攻撃手法。多数IDへの失敗という形が似ていても、使用値が不明なら同一パスワードの試行とは確定できない"
+    },
+    {
+      "term": "X-Forwarded-For",
+      "definition": "プロキシ等が送信元情報を伝えるHTTPヘッダー。信頼する経路や入力条件を確認して使う"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_ATTEMPT",
+    "causeId": "H_GROUP",
+    "repairId": "R_CORRELATE",
+    "preventionId": "P_TEST",
+    "verificationId": "V_COMPARE",
+    "claimRules": [
+      {
+        "claimId": "C_PATTERN",
+        "requiredEvidenceSets": [
+          [
+            "E03"
+          ],
+          [
+            "E07"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E04",
+          "E06"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_RULE",
+        "requiredEvidenceSets": [
+          [
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E02",
+          "E07"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_NOSESSION",
+        "requiredEvidenceSets": [
+          [
+            "E08"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E03"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "criticalOptionIds": [
+      "R_HIDE",
+      "P_IP"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：原記録には多数IDの失敗があり、担当の通知一覧は0件ですが、正常観測会の投稿は続いています（E01）。一覧だけで安全や侵入を決めず、数える試行と通知生成の条件を確認します。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "確認した事実：Q01〜Q10は14:01〜14:04、同じsource203.0.113.75から10IDへ各一回password失敗し、AUTH-A/B双方に跨ります（E03）。入口でも十件に対応し（E04）、全認証イベントは取込済み、欠落0、遅延最大2秒、JSTとして保持されています（E06）。30行は入口・認証・receiptの各十行で、三十試行ではありません。",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E06"
+        ]
+      },
+      {
+        "text": "残る原因：記録の欠落や五分外の時刻ズレではなく、固定再集計でも五分内10試行/10ID/2nodeです（E07）。通知生成は0なので、生成済み通知が担当へ配送されなかった説明ではありません（E05/E07）。正常NATのsourceと調査群は別で、正規群の成功を失敗と誤認したのでもありません（E03/E09）。",
+        "evidenceIds": [
+          "E07",
+          "E05",
+          "E03",
+          "E09"
+        ]
+      },
+      {
+        "text": "要件と実設定の不一致：通知要件はsource単位で八以上の異なるIDの失敗を認証node横断で数えます（E02）。現在R_ACCOUNTはsource/user_id/auth_nodeごとに分割し、各まとまりで五失敗以上を要求します（E05）。調査群は各ID一回なので各bucketは一、通知0になります（E07）。正常に働くIDロックとこの跨ID通知の不一致は別の問題です。",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E07"
+        ]
+      },
+      {
+        "text": "対策：原ログ・設定・取込品質を保全し、未承認多数ID試行の当該sourceへ暫定制限と調査を行います。正常観測会は維持し、要件に沿う跨ID・跨node通知を追加して既存IDロックも残します（E02/E10）。対象期間・requestではpassword失敗、session/token発行0、業務read/export0であり、その範囲の侵入成功は未確認と報告します（E08）。パスワード同一性や人物身元を断定しません。",
+        "evidenceIds": [
+          "E02",
+          "E10",
+          "E08"
+        ]
+      },
+      {
+        "text": "確認：今後は保全Q群を一事象として通知し担当者が受信すること、正常QF群は誤警報にせず投稿が続くこと、同IDの繰返しロックも維持することを対照試験します。filter、重複排除、実source、時刻、全nodeの取込を確認します（E02/E06/E07/E09/E10）。MFAも維持しますが、失敗監視の代替にはしません。以前や他経路の全体被害まで、今回の未成功範囲で否定しない報告にします。",
+        "evidenceIds": [
+          "E02",
+          "E06",
+          "E07",
+          "E09",
+          "E10"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_DELIVERY": {
+        "text": "R_ACCOUNTの集計では通知生成そのものが0（E05/E07）。生成後配送停止という前提が成立しない。前日配信試験E12は補助で、今日の生成有無を直接証明するものではない",
+        "evidenceIds": [
+          "E05",
+          "E07",
+          "E12"
+        ]
+      },
+      "H_CLOCK": {
+        "text": "原結果は14:01〜14:04（E03）、time_parse=JST・取込遅延最大2秒（E06）。14:00〜14:05再集計で10失敗が同じwindowに収まる（E07）。時刻外の説明は一致しない",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E07"
+        ]
+      },
+      "H_GROUP": {
+        "text": "正常通知はsource単位でdistinct user>=8（E02）。R_ACCOUNTはsource/user/node単位でcount>=5（E05）。保全群は10IDでも各bucket1で通知0になる（E07）",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E07"
+        ]
+      },
+      "H_NORMAL": {
+        "text": "調査群はsource203.0.113.75で全件fail（E03）。正常観測会は別source198.51.100.75の成功と3失敗（E09）。送信元と結果を混同した説明にはならない",
+        "evidenceIds": [
+          "E03",
+          "E09"
+        ]
+      },
+      "H_LOSS": {
+        "text": "全認証イベントは取込済み、dropped=0でrequestとevent_typeを保持（E06）。AUTH-A/B双方の原結果と再集計もある（E03/E07）。片側欠落ではない",
+        "evidenceIds": [
+          "E06",
+          "E03",
+          "E07"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_ATTEMPT": {
+        "text": "十件の原結果と固定集計が同じsource/10ID/各一回の失敗を示す（E03/E07）。session/tokenと業務read/exportは対象期間・request範囲で0（E08）。他時刻まで侵入を否定しない",
+        "evidenceIds": [
+          "E03",
+          "E07",
+          "E08"
+        ]
+      },
+      "S_BREACH": {
+        "text": "調査群はpassword failでsession/token発行0、対象request/主体のread/export0（E08）。認証試行から十人の全データ流出を確定している",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "S_NAT": {
+        "text": "正常観測会は10人のpassword/MFA成功があり、3件の失敗後も本人成功（E09）。編集者報告でも投稿は正常（E01）。全員拒否という範囲に一致しない",
+        "evidenceIds": [
+          "E09",
+          "E01"
+        ]
+      },
+      "H_GROUP": {
+        "text": "正常通知はsource単位でdistinct user>=8（E02）。R_ACCOUNTはsource/user/node単位でcount>=5（E05）。保全群は10IDでも各bucket1で通知0になる（E07）",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E07"
+        ]
+      },
+      "H_LOSS": {
+        "text": "全認証イベントは取込済み、dropped=0でrequestとevent_typeを保持（E06）。AUTH-A/B双方の原結果と再集計もある（E03/E07）。片側欠落ではない",
+        "evidenceIds": [
+          "E06",
+          "E03",
+          "E07"
+        ]
+      },
+      "H_CLOCK": {
+        "text": "原結果は14:01〜14:04（E03）、time_parse=JST・取込遅延最大2秒（E06）。14:00〜14:05再集計で10失敗が同じwindowに収まる（E07）。時刻外の説明は一致しない",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E07"
+        ]
+      },
+      "H_DELIVERY": {
+        "text": "R_ACCOUNTの集計では通知生成そのものが0（E05/E07）。生成後配送停止という前提が成立しない。前日配信試験E12は補助で、今日の生成有無を直接証明するものではない",
+        "evidenceIds": [
+          "E05",
+          "E07",
+          "E12"
+        ]
+      },
+      "H_NORMAL": {
+        "text": "調査群はsource203.0.113.75で全件fail（E03）。正常観測会は別source198.51.100.75の成功と3失敗（E09）。送信元と結果を混同した説明にはならない",
+        "evidenceIds": [
+          "E03",
+          "E09"
+        ]
+      },
+      "C_PATTERN": {
+        "text": "原認証結果E03の十行又は固定再集計E07が、時間・source・request・ID・node・結果を含むため一枚で成立する。入口/品質E04/E06だけは成否又はIDの全対応が不足し部分点",
+        "evidenceIds": [
+          "E03",
+          "E07",
+          "E04",
+          "E06"
+        ]
+      },
+      "C_RULE": {
+        "text": "公開された正常要件に対して、現在のgroup/filter/閾値を持つE05一枚で差を確認できる。正常要件E02又は集計E07だけは現在ruleの全設定を示さず部分点",
+        "evidenceIds": [
+          "E05",
+          "E02",
+          "E07"
+        ]
+      },
+      "C_NOSESSION": {
+        "text": "成立範囲全件E08が対象requestと期間、session/token・業務read/exportを示す。原結果E03はsessionなしの参考になるが業務側まで示さず部分点",
+        "evidenceIds": [
+          "E08",
+          "E03"
+        ]
+      },
+      "F_SPRAY": {
+        "text": "使用値も同一値照合タグも記録していない（E03）。形が似た手法名だけでパスワード同一性を実証したとは言えない",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "F_ROWS": {
+        "text": "入口はQ01〜Q10各一件（E04）。30行は入口/認証/receipt各10行で同じ試行に由来する（E06）。段階違いの行を試行へ重複加算している",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      "F_MANY": {
+        "text": "正常な観測会も同じNATから十人がpassword/MFA成功している（E09）。多数IDや出口IPだけで悪意・攻撃・身元を判断できない",
+        "evidenceIds": [
+          "E09"
+        ]
+      },
+      "R_CORRELATE": {
+        "text": "通知要件と現在値を揃える必要がある（E02/E05）。対象sourceへの暫定対応は可能で正常NATを維持する（E10）。成功の確認範囲はE08に限定し、保全記録を消さない",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E10",
+          "E08"
+        ]
+      },
+      "R_THRESHOLD": {
+        "text": "調査群は各ID一回なので、IDロックを四回へ厳しくしてもロック条件に達しない（E03）。R_ACCOUNTのgroupと通知閾値はその操作では変わらず、跨ID通知の不足が残る（E02/E05/E07）。ロックと通知は別の保護",
+        "evidenceIds": [
+          "E03",
+          "E02",
+          "E05",
+          "E07"
+        ]
+      },
+      "R_HIDE": {
+        "text": "正常業務を止め、試行と設定を再確認する根拠を失う危険操作（E03/E05/E06/E09）。全員ロックと削除は不要で、対象を限定した保全後対応が可能（E10）",
+        "evidenceIds": [
+          "E03",
+          "E05",
+          "E06",
+          "E09",
+          "E10"
+        ]
+      },
+      "P_TEST": {
+        "text": "集計条件と品質を継続確認する（E02/E06/E07）。正常群を誤警報にしない対照が必要（E09）。MFAを保ち、IPだけの恒久判断にしない（E08/E10）",
+        "evidenceIds": [
+          "E02",
+          "E06",
+          "E07",
+          "E09",
+          "E08",
+          "E10"
+        ]
+      },
+      "P_IP": {
+        "text": "正常NATの正規成功と業務を恒久拒否する危険操作（E09/E10）。sourceは人の身元でも悪意でもなく、同じ出口という事実だけで群を危険と断定できない",
+        "evidenceIds": [
+          "E09",
+          "E10"
+        ]
+      },
+      "P_MFAONLY": {
+        "text": "MFAは有効な防御だが、今回の調査群はpassword段階で失敗しておりMFA challengeはない（E08）。調査開始の失敗監視要件（E02）をMFA表示で置き換えられない",
+        "evidenceIds": [
+          "E08",
+          "E02"
+        ]
+      },
+      "V_COMPARE": {
+        "text": "10試行を10回通知するのでなく、要件に合う一事象として検知する対照試験（E02/E03/E07）。正常群と既存ID保護も維持し、品質と担当受信を今後確認する（E06/E09/E10）",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E07",
+          "E06",
+          "E09",
+          "E10"
+        ]
+      },
+      "V_ZERO": {
+        "text": "現在も一覧0件なのに、原失敗群は通知要件に合う（E01/E03/E07）。ゼロという表示だけで、適切な検知や侵入の不存在は確認できない",
+        "evidenceIds": [
+          "E01",
+          "E03",
+          "E07"
+        ]
+      },
+      "V_PING": {
+        "text": "pingは到達性の確認に留まり、group/閾値やイベント取込・通知条件を検証しない（E05/E06/E07）。生成と担当受信の対照が不足する",
+        "evidenceIds": [
+          "E05",
+          "E06",
+          "E07"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "原ログと通知の症状差、正常投稿。侵入の断定ではない",
+      "E02": "通知/IDロックの正常要件。C_RULE補助、公開正常要件もある",
+      "E03": "十件の完全原結果。C_PATTERN一枚立証、C_NOSESSION補助。パスワード値はない\n表示上の制作条件：十件を省略せず表示。",
+      "E04": "TLS実sourceとrequest対応。C_PATTERN補助、認証成否は含まない",
+      "E05": "稼働group/filter/dedup/閾値。C_RULE一枚立証",
+      "E06": "全件取込・遅延・時刻・複製行数。C_PATTERN補助と欠落/時刻説の反証",
+      "E07": "同snapshot固定再集計。C_PATTERNの代替満点、C_RULE補助。本番修正後ログではない",
+      "E08": "対象時間/request/主体のsessionと業務不成立。C_NOSESSION一枚立証、全時間の無被害へ広げない",
+      "E09": "正常NATの成功と三失敗対照。多人数の誤警報・全員拒否の反証",
+      "E10": "承認試験予定0と暫定制限条件。IP所有者や悪意を断定しない",
+      "E11": "早い時刻の別投稿端末容量通知。認証/通知配送へ依存しないノイズ",
+      "E12": "前日の別合成通知と当日health。今日の発報条件成立を示さないノイズ/参考記録"
+    }
+  }
+}

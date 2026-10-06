@@ -1,0 +1,1169 @@
+{
+  "schemaVersion": 1,
+  "id": "case08",
+  "revision": 1,
+  "title": "古書工房、届け先を決めたのは誰",
+  "type": "security",
+  "difficulty": 3,
+  "estimatedMinutes": 20,
+  "prerequisites": [
+    "Cookie・GET/POST・本人意思確認の概要（用語辞典で確認できます）"
+  ],
+  "brief": "古書修復工房の受渡しサイトで、持ち主が確認フォームを開いていないのに、預かり票の引渡先が変わりました。持ち主は外部の案内リンクを開いただけだと話しています。本はまだ出庫されていません。直した一冊を本人の望まない場所へ送らず、当日の変更受付も続けられる対処を調べてください。正常時は、ログインした持ち主が自分の票を確認フォームから変更し、閲覧だけでは引渡先が変わらない必要があります。入口、ブラウザ、変更監査を照合し、何を受け付けたかと本人の変更意思を分けて報告してください。記録を残したうえで、持ち主と合意した引渡先を守る復旧計画をお願いします。",
+  "context": {
+    "baseline": [
+      "持ち主はログイン後、自分が預けた一冊の引渡し場所を確認フォームから変更できる。閲覧用GETでは変更しない。当日の変更受付は必要で、他人の票や資料へはアクセスできない。今回のowner checkは正常で、匿名要求は401になる。"
+    ],
+    "assumptions": [
+      "セッションCookieはhost-only、Secure、HttpOnly、SameSite=Lax明示。対象ドメインはhandoff.book.example.testのみ。別siteのstory-notice.testはこのCookieを読めない。",
+      "今回の端末ブラウザは、外部siteからのトップレベルGETナビゲーションではLax Cookieを対象hostに添付する。iframeや画像の要求とは異なる。Cookie値を見せず、session_labelで対応を表示する。GETにOriginヘッダーがないこと自体を異常とは扱わない。Refererは経路の参考情報で、本人意思を証明する唯一の認証手段にしない。CORS許可がなくてもリンク遷移を阻止しない。",
+      "HTTPSを使う区間のTLS検証は正常。公開入口の内側には、保護されたHTTP/8080区間がある。外部から業務サーバへ直接侵入する別経路はない。",
+      "10:50〜11:20の変更監査・認証監査・保全ブラウザtraceは全件。server_request_idで対応付ける。11:20に全12資料が存在し、任意順に閲覧できる。後の試験も独立した隔離レプリカの固定記録で、プレイヤーによる修復後ログを作らない。",
+      "資料時刻（observedAt）は、その資料の状態・範囲を観測した時刻。全件資料は収録終端、複数イベントは最後のイベント以後を示す。個別の出来事の時刻は本文に残し、「取得」は資料を調査へ揃えた時刻を示す。",
+      "L08は外部サーバからPCへリンクが提示される論理関係で、Cookie付き変更要求を外部サーバがAPPへ直接送る物理通信ではない。認証・owner check・意図確認はAPPの処理条件として別記し、外部siteとAPPの間に認可線や侵入線を追加しない。本件に署名検証線はない。\nWAFは本件URL/GETを仕様上そのまま通す。観測点はPCの保存trace、EDGEの入口、APPの認証・処理、DBの変更監査。アドレスと線の意味は詳細表示と文字でも確認できる。"
+    ],
+    "snapshotTime": "2026-10-05T11:20:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_OWNER",
+        "label": "持ち主PC",
+        "kind": "client",
+        "addresses": [
+          "10.72.10.22",
+          "境界：所有者端末"
+        ]
+      },
+      {
+        "id": "N_EXT",
+        "label": "外部案内",
+        "kind": "service",
+        "addresses": [
+          "story-notice.test",
+          "203.0.113.72",
+          "境界：外部site"
+        ]
+      },
+      {
+        "id": "N_EDGE",
+        "label": "公開入口",
+        "kind": "gateway",
+        "addresses": [
+          "handoff.book.example.test",
+          "192.0.2.72",
+          "FW・WAF・TLS終端",
+          "境界：公開入口"
+        ]
+      },
+      {
+        "id": "N_APP",
+        "label": "受渡し処理",
+        "kind": "service",
+        "addresses": [
+          "10.72.20.12",
+          "境界：非公開業務"
+        ]
+      },
+      {
+        "id": "N_DB",
+        "label": "預かり票DB",
+        "kind": "storage",
+        "addresses": [
+          "10.72.30.12",
+          "境界：非公開業務"
+        ]
+      },
+      {
+        "id": "N_TEST",
+        "label": "同型試験",
+        "kind": "test",
+        "addresses": [
+          "10.72.40.12",
+          "境界：隔離試験"
+        ]
+      },
+      {
+        "id": "N_LOG",
+        "label": "監査保管",
+        "kind": "monitor",
+        "addresses": [
+          "10.72.50.12",
+          "境界：組織の監査領域"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L01",
+        "from": "N_OWNER",
+        "to": "N_EXT",
+        "label": "HTTPS/TCP443、外部案内の取得（通信の実線）"
+      },
+      {
+        "id": "L02",
+        "from": "N_OWNER",
+        "to": "N_EDGE",
+        "label": "HTTPS/TCP443、画面とナビゲーション（通信の実線）"
+      },
+      {
+        "id": "L03",
+        "from": "N_EDGE",
+        "to": "N_APP",
+        "label": "HTTP/TCP8080、保護された内部転送（通信の実線）"
+      },
+      {
+        "id": "L04",
+        "from": "N_APP",
+        "to": "N_DB",
+        "label": "TCP5432、票の参照・変更（通信の実線）"
+      },
+      {
+        "id": "L05",
+        "from": "N_APP",
+        "to": "N_LOG",
+        "label": "HTTPS/TCP443、監査転送（監査の点線）"
+      },
+      {
+        "id": "L06",
+        "from": "N_EDGE",
+        "to": "N_LOG",
+        "label": "HTTPS/TCP443、入口記録転送（監査の点線）"
+      },
+      {
+        "id": "L07",
+        "from": "N_OWNER",
+        "to": "N_TEST",
+        "label": "HTTPS/TCP443、調査前の固定診断（試験の細線）"
+      },
+      {
+        "id": "L08",
+        "from": "N_EXT",
+        "to": "N_OWNER",
+        "label": "リンク案内の論理関係（案内の破線）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "持ち主の申告と預かり票",
+      "kind": "report",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_OWNER"
+      ],
+      "source": "持ち主の申告保全",
+      "observedAt": "2026-10-05T11:09:00+09:00",
+      "observedAtLabel": "資料時刻・11:09:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "春田の申告：「外部の案内リンクを開いたあと、B72の引渡先が本店から外部受渡箱へ変わった。変更確認フォームは開いていない」"
+          },
+          {
+            "type": "text",
+            "body": "預かり票はB72、持ち主はo72。出庫はまだ行っていない。これは持ち主の申告で、Cookieが盗まれたことや、外部の誰かが操作したことを確定する資料ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "受渡し業務の変更要件",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_APP"
+      ],
+      "source": "業務要件と変更API仕様",
+      "observedAt": "2026-10-05T10:50:00+09:00",
+      "observedAtLabel": "資料時刻・10:50:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "変更できる対象：ログイン主体が所有する自分の票のみ",
+              "意思確認：確認POSTで本人の変更意思を確認する",
+              "閲覧GET：引渡先を変更しない",
+              "当日の変更受付：継続必須",
+              "変更受理時の監査：before / after / request_idをすべて残す"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "外部受渡箱も正規の候補場所であり、値の形式は正しい。ただし、候補内の値であることと、持ち主がそこへ変更する意思を確認したことは別の条件。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "公開入口の要求記録",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_EDGE"
+      ],
+      "source": "公開入口の保全要求ログ",
+      "observedAt": "2026-10-05T11:08:03+09:00",
+      "observedAtLabel": "資料時刻・11:08:03",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "11:07:00 request=R71 method=GET path=/handoff/view",
+              "         http=200 / 変更なし",
+              "11:08:03 request=R72 method=GET path=/handoff/update",
+              "         content_type=none",
+              "         session_label=S72 auth_user=o72",
+              "         referer=https://story-notice.test/",
+              "         http=200 forwarded=APP",
+              "         target=B72 new_location=BOX9",
+              "         TLS検証=正常 Origin=absent"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "実際のURLパラメーターを公開せず、対象と新値を構造化欄に表示する。R71とR72は別要求。GETのOrigin不在自体を異常とは判定しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "預かり票の変更監査と出庫状態",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_DB"
+      ],
+      "source": "預かり票の全変更監査・業務出庫記録",
+      "observedAt": "2026-10-05T11:20:00+09:00",
+      "observedAtLabel": "資料時刻・11:20:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "11:08:03 request=R72 ticket=B72 owner=o72",
+              "         before=MAIN after=BOX9",
+              "         operation=update actor=o72",
+              "10:50〜11:20 / B72の全変更：R72のみ",
+              "11:10 ticket=B72 status=held dispatched=false"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "MAINは本店、BOX9は外部受渡箱。DB監査は変更内容と要求IDを残すが、要求methodやブラウザの入口経路はこの資料には含まない。票の変更と物理的な出庫も区別する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "稼働ルーティングとCookie設定",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_APP"
+      ],
+      "source": "稼働ルート設定の保全",
+      "observedAt": "2026-10-05T10:55:00+09:00",
+      "observedAtLabel": "資料時刻・10:55:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "GET /handoff/update",
+              " → session auth",
+              " → owner check",
+              " → location enum validation",
+              " → update",
+              " confirmation-token検証：なし",
+              " Origin / Fetch-Metadata検査：なし",
+              "POST /handoff/confirm",
+              " → セッションに結び付けた意図確認tokenの検証あり",
+              "GET /handoff/view",
+              " → 参照のみ",
+              "Cookie：host-only / Secure / HttpOnly / SameSite=Lax（明示）",
+              "対象ドメイン：handoff.book.example.testのみ",
+              "旧互換GETの追加：10:40"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "Cookieの実値や意図確認token値は非表示。location enum validationは引渡先が正規候補値かを検査する処理。owner checkは票の持ち主を検査する処理で、変更意思の確認とは別。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "保全ブラウザtrace",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_OWNER"
+      ],
+      "source": "該当ページ保存内容・ナビゲーション追跡",
+      "observedAt": "2026-10-05T11:08:03+09:00",
+      "observedAtLabel": "資料時刻・11:08:03",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "11:08:01 外部案内ページへtop-level遷移",
+              "11:08:03 本人のリンククリック",
+              "         top-level navigate",
+              "         method=GET path=/handoff/update request=R72",
+              "         session_label=S72：対象hostのみへ添付",
+              "         外部hostへのS72送信：なし",
+              "script_execution=none",
+              "form_submit=none"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "script_execution=noneは、該当ページの保存内容とナビゲーション追跡で確認。このクリックが引渡先の変更を意味するという説明は案内画面にない。Cookie値は保存資料から表示しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "隔離レプリカの固定対照試験",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "nodeIds": [
+        "N_TEST"
+      ],
+      "source": "同型隔離環境の合成データ試験",
+      "observedAt": "2026-10-05T11:14:00+09:00",
+      "observedAtLabel": "資料時刻・11:14:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "同じCookie属性を使う隔離環境で、合成所有者T72を対象に試験。稼働GETのowner checkは変更していない。"
+          },
+          {
+            "type": "table",
+            "columns": [
+              "保存済みの試験条件",
+              "応答・状態変更"
+            ],
+            "rows": [
+              [
+                "外部ページからtop-level GET",
+                "sessionあり / 変更1件"
+              ],
+              [
+                "Cookieなしの同要求",
+                "401 / 変更0件"
+              ],
+              [
+                "参照GET",
+                "200 / 変更0件"
+              ],
+              [
+                "意図確認tokenなしPOST",
+                "403 / 変更0件"
+              ]
+            ]
+          },
+          {
+            "type": "text",
+            "body": "本番のB72を試験で変更した記録ではない。iframe/img試験の結果として読み替えない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "認証と処理経路の監査",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_APP"
+      ],
+      "source": "対話認証・アプリ処理の全件監査",
+      "observedAt": "2026-10-05T11:20:00+09:00",
+      "observedAtLabel": "資料時刻・11:20:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "10:50〜11:20 / o72の対話login：10:52の本人端末1件",
+              "発行session_label=S72",
+              "API token経路：なし",
+              "request=R72 auth=session",
+              "owner_check=pass",
+              "statement=parameterized UPDATE",
+              "target=B72",
+              "S72で別の人の票B99を指定した試験：403"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "owner制御は維持されている。parameterized UPDATEは入力値をSQL文そのものとして実行しない処理。認証主体がo72であることから、変更意思の確認を行ったと自動判断しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "復旧制約と回帰試験計画",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_TEST"
+      ],
+      "source": "復旧制約・隔離環境の試験計画",
+      "observedAt": "2026-10-05T11:15:00+09:00",
+      "observedAtLabel": "資料時刻・11:15:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "互換GET変更廃止後：",
+              "  参照GETの閲覧を継続可能",
+              "  セッションに結び付いたtoken付きPOSTの変更を提供可能",
+              "回帰項目：",
+              "  token欠落の拒否",
+              "  他セッションtokenの拒否",
+              "  非本人票の拒否",
+              "不要な対応：業務利用者の端末入替、FW停止"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "token値は非表示。これは復旧可能な構成と試験計画の記録で、本番の修復や本人合意がすでに完了したという資料ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "正規確認フォームの比較記録",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_APP"
+      ],
+      "source": "別持ち主の正規変更監査",
+      "observedAt": "2026-10-05T11:16:00+09:00",
+      "observedAtLabel": "資料時刻・11:16:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "subject=o73 ticket=B73",
+              "method=POST path=/handoff/confirm",
+              "token_check=pass owner_check=pass",
+              "before=MAIN after=BRANCH",
+              "本人確認操作record=F73"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "BRANCHは正規の引渡し候補。別持ち主o73の正常フォームによる変更記録で、B72の変更意思や合意を証明するものではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "title": "紙票読取器のメンテナンス",
+      "kind": "alert",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_LOG"
+      ],
+      "source": "別建物の紙票読取器記録",
+      "observedAt": "2026-10-05T09:05:00+09:00",
+      "observedAtLabel": "資料時刻・09:05:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "別建物の紙票読取器が09:00に清掃モードへ入り、09:05に終了。当日のWeb変更とDBはこの読取器に依存しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "title": "古書紹介ページの画像保存報告",
+      "kind": "report",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_OWNER"
+      ],
+      "source": "前日の公開紹介画像についての報告保全",
+      "observedAt": "2026-10-04T17:30:00+09:00",
+      "observedAtLabel": "資料時刻・17:30:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T11:20:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "前日17:30、公開古書紹介ページの画像解像度が低いと報告。ページは別の公開CDNで、認証Cookieや変更APIと共有しない。画像の問題は修復済み。紹介画像の見え方と、今回の引渡先の変更を同じ不具合として扱わない。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_GET",
+      "label": "意図確認のない互換GET",
+      "description": "意思確認のない互換GETが、本人セッションを伴うトップレベル遷移を受け付け、引渡先の変更として処理した"
+    },
+    {
+      "id": "H_SYNC",
+      "label": "正規フォームの変更競合",
+      "description": "持ち主が二つの正規確認フォームから別の場所を送信し、競合した変更が最後の値として保存された"
+    },
+    {
+      "id": "H_STEAL",
+      "label": "外部へのCookie送信",
+      "description": "セッションCookieが外部hostへ送信され、別の端末がその認証情報を使って引渡先を変更した"
+    },
+    {
+      "id": "H_SQL",
+      "label": "SQL文による別命令",
+      "description": "候補場所の入力がSQL文として実行され、正規の票更新とは別の命令がDBの引渡先を書き換えた"
+    },
+    {
+      "id": "H_OWNER",
+      "label": "owner checkの省略",
+      "description": "他人の票へのowner checkが省略され、持ち主ではない主体がB72の引渡先を変更した"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_PASS",
+        "label": "全利用者のパスワード変更",
+        "description": "影響を全利用者のパスワード変更と捉え、受渡し先ではなく認証情報が一括変更された範囲として案内する"
+      },
+      {
+        "id": "S_TICKET",
+        "label": "票1件の変更と未出庫",
+        "description": "B72の引渡先1件が本人確認フォームを経ず変更され、本は未出庫のまま。票の変更と物理配送を分けた範囲とする"
+      },
+      {
+        "id": "S_BOOKS",
+        "label": "全預かり品の配送被害",
+        "description": "引渡先の異常を全預かり品の配送被害と捉え、すべての本が既に工房から外部へ配送された範囲として報告する"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_GET",
+        "label": "意図確認のない互換GET",
+        "description": "意思確認のない互換GETが、本人セッションを伴うトップレベル遷移を受け付け、引渡先の変更として処理した"
+      },
+      {
+        "id": "H_SYNC",
+        "label": "正規フォームの変更競合",
+        "description": "持ち主が二つの正規確認フォームから別の場所を送信し、競合した変更が最後の値として保存された"
+      },
+      {
+        "id": "H_STEAL",
+        "label": "外部へのCookie送信",
+        "description": "セッションCookieが外部hostへ送信され、別の端末がその認証情報を使って引渡先を変更した"
+      },
+      {
+        "id": "H_SQL",
+        "label": "SQL文による別命令",
+        "description": "候補場所の入力がSQL文として実行され、正規の票更新とは別の命令がDBの引渡先を書き換えた"
+      },
+      {
+        "id": "H_OWNER",
+        "label": "owner checkの省略",
+        "description": "他人の票へのowner checkが省略され、持ち主ではない主体がB72の引渡先を変更した"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "C_LINK",
+        "label": "外部案内からの本人GET",
+        "description": "R72は外部案内から、本人ブラウザのセッション付きトップレベルGETとして到達した",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_CORS",
+        "label": "CORSなしではリンクも不達",
+        "description": "外部siteへのCORS許可がなければ、本人が押すリンク遷移もサービスへ届かない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_ROUTE",
+        "label": "閲覧GET要件と互換ルート",
+        "description": "閲覧GET不変の要件に対し、互換GETが意思確認を検証せず変更を実行する",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_INPUT",
+        "label": "正規候補なら本人確認済み",
+        "description": "引渡先が正規候補の値なら、持ち主が変更を確認した操作として受け付けてよい",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C_EFFECT",
+        "label": "GETと票変更・未出庫の対応",
+        "description": "GETのR72がB72の引渡先を変えた1件で、未出庫の状態まで確認できる",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "F_LAX",
+        "label": "Laxなら外部GETに常に添付なし",
+        "description": "SameSite=LaxのCookieは、外部ページからのGETには条件によらず一切添付されない",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R_DROP",
+        "label": "防御全面停止と監査削除",
+        "description": "WAFとFWを全面停止して入口の制限を外し、要求と変更の監査を削除して画面を整理する。GET変更は残し、通知や過去記録のない状態で受渡し業務を再開する"
+      },
+      {
+        "id": "R_CLOSE",
+        "label": "保全・POST統一と本人確認",
+        "description": "要求・変更監査・traceを保全し、互換GETの変更を廃止してtoken付きPOSTへ統一する。B72は本人と引渡先を確認して戻し、出庫保留と参照GETの閲覧を維持する"
+      },
+      {
+        "id": "R_COOKIE",
+        "label": "HttpOnly追加で業務継続",
+        "description": "既存ルートのままCookieへHttpOnlyを追加する。スクリプトによる読出しを止めて引渡先変更を防ぎ、GETのupdateと現在の票の値を残したまま当日受付を続ける"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_ENUM",
+        "label": "候補値のenum点検",
+        "description": "正規候補場所のenum一覧を再点検し、正しい形式の値だけを変更先として許可する。現在のGET/POST受付と意図確認条件は変えず、候補値の厳格な確認で再発を防ぐ"
+      },
+      {
+        "id": "P_TEST",
+        "label": "状態変更ルートの回帰試験",
+        "description": "全状態変更ルートのmethod・意図確認token・owner checkを回帰試験し、外部トップレベル遷移も確認する。適切なOrigin/Fetch-Metadata防御を補助として追加する"
+      },
+      {
+        "id": "P_CORS",
+        "label": "CORS設定を中心に改善",
+        "description": "CORS設定を変更し、外部originからの利用制限を再発防止の中心にする。GETによる引渡先変更は互換性のため残し、本人のリンク遷移もその設定で防ぐ運用にする"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_SIGNOUT",
+        "label": "ログアウトで再発防止判定",
+        "description": "本人ブラウザをログアウトさせ、セッションが終了した画面を確認する。それを再発防止の完了条件とし、次のログインやGET/POSTによる変更処理は追加で試験しない"
+      },
+      {
+        "id": "V_MUTATION",
+        "label": "変更・拒否と業務状態の対照",
+        "description": "GETは変更0、正規token付きPOSTは本人票のみ変更成功、欠落・他セッションtoken・非本人票は拒否を確認する。B72の合意状態・出庫保留・ログ保存も確認する"
+      },
+      {
+        "id": "V_200",
+        "label": "HTTP200で完了判定",
+        "description": "変更画面がHTTP200で返ることを確認する。正常応答が得られたら対処完了とし、状態変更の有無、token拒否、票の合意状態や出庫保留は追加で確かめない"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "セッションで認証されたことと、本人が変更を確認したことは別。変更の確認フォームを使った記録があるか読む。",
+      "evidenceIds": [
+        "E01",
+        "E03",
+        "E04"
+      ]
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "R72を、ブラウザ・入口・DBの記録で対応させる。要求の方式、添付されたセッション、変更結果を分けて見る。",
+      "evidenceIds": [
+        "E05",
+        "E06",
+        "E07"
+      ]
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "閲覧GET不変の要件と、稼働GETルートの検査を比べる。正規POSTで何を確認しているか、固定対照試験も含めて読む。",
+      "evidenceIds": [
+        "E02",
+        "E05",
+        "E09",
+        "E10"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "GET",
+      "definition": "Webの情報を取得するためのHTTP method。状態変更を行う用途とは分けて設計する"
+    },
+    {
+      "term": "POST",
+      "definition": "データの送信や処理要求に使うHTTP method。POSTという名称だけで本人意思を証明するわけではない"
+    },
+    {
+      "term": "Cookie",
+      "definition": "ブラウザが条件に応じて対象へ送る情報。セッション認証にも使われるため実値を公開しない"
+    },
+    {
+      "term": "host-only",
+      "definition": "Cookieの送信対象を設定したhostに限定する属性"
+    },
+    {
+      "term": "Secure",
+      "definition": "Cookieを安全な通信路で送るための属性"
+    },
+    {
+      "term": "HttpOnly",
+      "definition": "スクリプトからCookieを読み出すことを制限する属性。ブラウザの要求への添付とは別"
+    },
+    {
+      "term": "SameSite",
+      "definition": "siteをまたぐ要求へのCookie添付条件を指定する属性。LaxとStrictなどで条件が異なる"
+    },
+    {
+      "term": "トップレベル遷移",
+      "definition": "ブラウザの主画面そのものが別のページへ移ること。埋込み画像やiframeの要求とは区別する"
+    },
+    {
+      "term": "CSRF",
+      "definition": "認証済みブラウザを利用し、本人が意図しない処理要求を対象サービスへ送らせる問題"
+    },
+    {
+      "term": "CORS",
+      "definition": "別originからのスクリプトによる応答利用などを制御する仕組み。すべてのリンク遷移を遮断する機能ではない"
+    },
+    {
+      "term": "意図確認token",
+      "definition": "要求とセッション等の条件を対応付け、状態変更の確認に使う値。具体的な検証条件はシステム仕様による"
+    },
+    {
+      "term": "owner check",
+      "definition": "対象の持ち主と要求主体を照合する検査"
+    },
+    {
+      "term": "パラメータ化",
+      "definition": "入力値をSQL文の構造から分離し、値として処理する方法"
+    },
+    {
+      "term": "enum検査",
+      "definition": "値が定めた候補のいずれかであることを検査する方法"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_TICKET",
+    "causeId": "H_GET",
+    "repairId": "R_CLOSE",
+    "preventionId": "P_TEST",
+    "verificationId": "V_MUTATION",
+    "claimRules": [
+      {
+        "claimId": "C_LINK",
+        "requiredEvidenceSets": [
+          [
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E03",
+          "E07"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_ROUTE",
+        "requiredEvidenceSets": [
+          [
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E02",
+          "E07"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_EFFECT",
+        "requiredEvidenceSets": [
+          [
+            "E03",
+            "E04"
+          ],
+          [
+            "E04",
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E01"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "criticalOptionIds": [
+      "R_DROP"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：春田は案内リンクを開いたあとB72の引渡先が変わり、変更確認フォームは開いていないと申告しています。物理出庫はまだ行っていません（E01）。画面の変化だけで全預かり品の配送やCookie窃取を断定せず、要求と変更を対応させます。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "確認した事実：本人ブラウザは外部案内からリンクをクリックし、S72を対象hostだけに添付してトップレベルGETを送っています（E06）。入口はそのR72をo72のGET要求として受け付け、APPへ転送しました（E03）。DBはR72でB72をMAINからBOX9へ変更し、期間内の変更はこの1件だけです。11:10にはheld/dispatched=falseで出庫していません（E04）。",
+        "evidenceIds": [
+          "E06",
+          "E03",
+          "E04"
+        ]
+      },
+      {
+        "text": "残る原因：Cookieは外部hostへ送られておらず、該当ページのスクリプト実行やフォーム送信もありません（E06）。owner checkは正常で、R72は本人の票を扱っています。SQLもパラメータ化され、他人の票B99は拒否されます（E08）。正規の候補場所であること、本人として認証されたことだけでは、変更意思を確認したことにはなりません（E02/E05/E10）。",
+        "evidenceIds": [
+          "E06",
+          "E08",
+          "E02",
+          "E05",
+          "E10"
+        ]
+      },
+      {
+        "text": "要件と実設定の不一致：業務要件では閲覧GETを不変とし、確認POSTで変更意思を確認します（E02）。10:40に追加された互換GETルートは、session/owner/enumを検査してupdateへ進む一方、意図確認tokenを検証していません（E05）。今回のブラウザは外部からのトップレベルGETでもLax Cookieを対象へ送るため、このルートがR72を変更として受理しました（E03/E06）。隔離対照も同じ条件で変更1件を再現しています（E07）。",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E03",
+          "E06",
+          "E07"
+        ]
+      },
+      {
+        "text": "対策：要求、変更監査、ブラウザtraceを保全し、互換GETによる変更を廃止して、セッションに結び付くtoken付きPOSTへ統一します。参照GETと当日の正規変更受付は続けられます（E09）。B72は本人と正しい引渡先を確認して戻し、出庫保留を維持します（E04）。CookieはすでにHttpOnlyで、CORS変更だけやenum再検査では意図確認を欠くルートは直りません（E05/E06）。",
+        "evidenceIds": [
+          "E09",
+          "E04",
+          "E05",
+          "E06"
+        ]
+      },
+      {
+        "text": "確認：今後の本番対処後は、GETで変更が起きないことと、正規token付きPOSTで本人票を変更できることを対で確認します。token欠落・他セッションtoken・非本人票が拒否されること、B72が本人の合意状態で未出庫であること、監査が保存されることも確認します（E02/E07/E09/E10）。固定資料は本番の対処完了を示すログではありません。引渡しは確認した合意に基づき、調査員が勝手に場所を決めません。",
+        "evidenceIds": [
+          "E02",
+          "E07",
+          "E09",
+          "E10"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_GET": {
+        "text": "本人ブラウザの遷移と入口のGET R72が対応し（E03/E06）、そのR72が票を変更（E04）。閲覧GET不変の要件に対し、互換GETルートには意図確認tokenの検査がない（E02/E05）",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E04",
+          "E02",
+          "E05"
+        ]
+      },
+      "H_SYNC": {
+        "text": "B72の期間全変更はR72だけ（E04）。ブラウザtraceにform_submitはなく（E06）、二つの正規フォームの競合という操作は記録と一致しない",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      "H_STEAL": {
+        "text": "保全traceではS72は対象hostだけへ添付され、外部hostへ送信していない。R72は本人のリンククリックによる遷移（E06）。処理もそのセッション経路で、別API token経路はない（E08）",
+        "evidenceIds": [
+          "E06",
+          "E08"
+        ]
+      },
+      "H_SQL": {
+        "text": "稼働ルートはlocation enum validationを行い（E05）、処理監査はparameterized UPDATE（E08）。入力をSQL文として実行した記録はなく、正規ルートの意図確認不足を説明できない",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "H_OWNER": {
+        "text": "R72の認証主体o72はB72の持ち主で、owner_check=pass。別の人の票B99はS72で403となる（E08）。owner制御の欠落ではなく、本人の票への変更意思を確認する条件が論点",
+        "evidenceIds": [
+          "E08"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_TICKET": {
+        "text": "本人申告とブラウザ記録には確認フォームの操作がない（E01/E06）。B72の全変更はR72だけで、11:10の出庫はheld/dispatched=false（E04）。既に外へ届けたという記録ではない",
+        "evidenceIds": [
+          "E01",
+          "E06",
+          "E04"
+        ]
+      },
+      "S_BOOKS": {
+        "text": "B72は未出庫（E04）。全預かり品が既に配送されたという範囲は、確認した票1件と保留状態からは導けず、B72の状態にも矛盾する",
+        "evidenceIds": [
+          "E04"
+        ]
+      },
+      "S_PASS": {
+        "text": "記録された更新はB72の引渡先（E04）。対象要求はS72のセッション認証による票変更であり（E08）、全利用者パスワードの変更を示す記録はない",
+        "evidenceIds": [
+          "E04",
+          "E08"
+        ]
+      },
+      "H_GET": {
+        "text": "本人ブラウザの遷移と入口のGET R72が対応し（E03/E06）、そのR72が票を変更（E04）。閲覧GET不変の要件に対し、互換GETルートには意図確認tokenの検査がない（E02/E05）",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E04",
+          "E02",
+          "E05"
+        ]
+      },
+      "H_STEAL": {
+        "text": "保全traceではS72は対象hostだけへ添付され、外部hostへ送信していない。R72は本人のリンククリックによる遷移（E06）。処理もそのセッション経路で、別API token経路はない（E08）",
+        "evidenceIds": [
+          "E06",
+          "E08"
+        ]
+      },
+      "H_OWNER": {
+        "text": "R72の認証主体o72はB72の持ち主で、owner_check=pass。別の人の票B99はS72で403となる（E08）。owner制御の欠落ではなく、本人の票への変更意思を確認する条件が論点",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "H_SQL": {
+        "text": "稼働ルートはlocation enum validationを行い（E05）、処理監査はparameterized UPDATE（E08）。入力をSQL文として実行した記録はなく、正規ルートの意図確認不足を説明できない",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "H_SYNC": {
+        "text": "B72の期間全変更はR72だけ（E04）。ブラウザtraceにform_submitはなく（E06）、二つの正規フォームの競合という操作は記録と一致しない",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      "C_LINK": {
+        "text": "ブラウザの外部案内・クリック・R72・セッション添付を一枚で示すE06が満点。入口E03又は隔離試験E07だけでは、本人ブラウザの全経路を示さず部分点",
+        "evidenceIds": [
+          "E06",
+          "E03",
+          "E07"
+        ]
+      },
+      "C_ROUTE": {
+        "text": "公開された閲覧GET不変の要件と、稼働GETルートの検査・updateを示すE05の一枚で立証できる。要件E02又は隔離試験E07だけなら、本番のルートを示す根拠が不足して部分点",
+        "evidenceIds": [
+          "E05",
+          "E02",
+          "E07"
+        ]
+      },
+      "C_EFFECT": {
+        "text": "入口のGET R72（E03）又はブラウザのGET R72（E06）を、DBの全変更R72とheld/dispatched=false（E04）へ結ぶ。E04だけではGET要求であったことを示さない",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E04"
+        ]
+      },
+      "F_LAX": {
+        "text": "今回のブラウザはトップレベルGETで対象hostへS72を添付しており、同型試験もsessionあり（E06/E07）。iframe/imgなど別条件と混同している",
+        "evidenceIds": [
+          "E06",
+          "E07"
+        ]
+      },
+      "F_CORS": {
+        "text": "実際に外部案内からのリンクでR72が届いている（E03/E06）。CORSはすべてのナビゲーションを遮断する仕組みではない",
+        "evidenceIds": [
+          "E03",
+          "E06"
+        ]
+      },
+      "F_INPUT": {
+        "text": "候補内の値でも本人意思を必要とする要件（E02）。互換GETは意図確認を検証せず（E05）、正規フォームのtoken/本人確認操作とは異なる（E10）",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E10"
+        ]
+      },
+      "R_CLOSE": {
+        "text": "記録を残し、意図確認を欠く変更ルートを廃止する（E03〜E06）。参照GETとtoken付きPOSTは継続可能（E09）。未出庫のB72は本人合意後に正しい場所へ戻す計画で、勝手に発送しない（E04）",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E09"
+        ]
+      },
+      "R_COOKIE": {
+        "text": "HttpOnlyは既に設定されている（E05）。該当ページはscript_execution=noneで、本人ブラウザの遷移にCookieが添付された（E06）。読出し制限の追加ではGET変更を止めず、本人合意も回復しない",
+        "evidenceIds": [
+          "E05",
+          "E06"
+        ]
+      },
+      "R_DROP": {
+        "text": "防御の全面停止と監査削除は保全・安全な継続を損なう危険操作。E03/E04/E06の対応を失い、GET変更も残る（E05）。E09はFW停止や端末入替を必要としていない",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E06",
+          "E05",
+          "E09"
+        ]
+      },
+      "P_TEST": {
+        "text": "GET/POSTの役割と各検査をルートごとに確認する（E02/E05）。同型外部遷移とtoken欠落拒否の対照（E07）、他セッションtoken/非本人票の回帰条件（E09）を継続する。補助防御で意図確認を省かない",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E07",
+          "E09"
+        ]
+      },
+      "P_CORS": {
+        "text": "CORS設定だけではリンク遷移を阻止しない。外部案内からのトップレベルGETが成立しており（E03/E06）、GETルートの意図確認不足を残す（E05）",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E05"
+        ]
+      },
+      "P_ENUM": {
+        "text": "BOX9は正規候補であり（E02）、enum検査は既に実施されている（E05）。値の正しさだけでは持ち主意思を確認できず、今回のGET変更を止めない",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      "V_MUTATION": {
+        "text": "停止すべきGET変更と、継続すべき参照GET/正規POSTを対にして試す（E07/E09/E10）。B72の本人合意と保留状態を確認し（E04）、変更前後と要求IDを記録する（E02）。将来の確認計画である",
+        "evidenceIds": [
+          "E07",
+          "E09",
+          "E10",
+          "E04",
+          "E02"
+        ]
+      },
+      "V_200": {
+        "text": "問題のR72自体が200で返り、DBの変更も起きている（E03/E04）。応答成功だけでは状態変更0、拒否条件、本人合意を確認できない",
+        "evidenceIds": [
+          "E03",
+          "E04"
+        ]
+      },
+      "V_SIGNOUT": {
+        "text": "一つのセッションを終了しても、意図確認を欠く互換GETルートは残る（E05）。次にログインした際の同様の遷移や、正規POSTと拒否条件を確認する計画が不足（E07/E09）",
+        "evidenceIds": [
+          "E05",
+          "E07",
+          "E09"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "症状と本人申告、未出庫。C_EFFECT補助。主観だけで経路を確定しない",
+      "E02": "業務要件・全変更監査条件・候補値と意思の区別。C_ROUTEの要件側",
+      "E03": "GET R72の入口とセッション受理。C_LINK補助、C_EFFECTの入口側",
+      "E04": "B72の期間全変更1件、before/after、物理未出庫。methodは含めない",
+      "E05": "互換GETと正規POSTの処理検査、Cookie、10:40追加。C_ROUTEの実装側",
+      "E06": "本人ブラウザの経路・対象hostへの添付・script/formなし。C_LINKの一枚立証、C_EFFECTのGET確認側の代替",
+      "E07": "隔離合成試験の再現と対照。C_LINK/C_ROUTE補助、本番修復後の成功ではない",
+      "E08": "認証方式・owner・パラメータ化。窃取別端末/IDOR/SQL説の反証",
+      "E09": "正規継続と拒否試験の復旧条件。本番実施済みとはしない",
+      "E10": "別持ち主の正規token付きPOST。本人意思確認の比較、B72合意の代替ではない",
+      "E11": "別建物の早い時刻の読取器メンテ。Web/DBの依存先ではない別件",
+      "E12": "前日の別公開CDNの画像問題。Cookie/変更APIと非共有の別件"
+    }
+  }
+}

@@ -1,0 +1,1102 @@
+{
+  "schemaVersion": 1,
+  "id": "case07",
+  "revision": 1,
+  "title": "種苗交換会、受け渡しの朝",
+  "type": "security",
+  "difficulty": 2,
+  "estimatedMinutes": 15,
+  "prerequisites": [
+    "認証・同意・委任アクセスの概要（用語辞典で確認できます）"
+  ],
+  "brief": "種苗交換会の受付で、地図支援の外部アプリへ連絡先を読み取られたという通知が届きました。担当者は会場案内をまとめるつもりで同意画面を操作しています。受け渡しを待つ人がいるため、受付の閲覧や便札作成を止めず、何が起きたか確かめてください。受付の非公開連絡先は本人が閲覧し、外部連携で読む場合は組織の審査を通ったアプリに限る決まりです。対象、認証、同意、実際の読取を記録から整理し、止めるべき連携と残すべき仕事を報告してください。通知だけで被害を広げず、確認できた範囲を伝え、記録を残して安全に対処する計画をお願いします。",
+  "context": {
+    "baseline": [
+      "受付の非公開連絡先は受付担当本人が閲覧する。外部連携による読取は、組織審査を通ったclient_idに限る。審査済み便札作成アプリA_LABELの用途はlabel.print。正規の受付と便札作成を維持することが対処の条件。"
+    ],
+    "assumptions": [
+      "この架空クラウドでは、同意によるgrantをsubject/client/scope単位で管理する。委任アクセスで扱える連絡先は、当該subject自身のcontactsのみ。会員共有データへ他人としてアクセスする仕様ではない。対話ログインのMFAは、外部アプリの組織審査を代替しない。",
+      "userinfo/contacts APIは要求ごとにgrantの有効性を照合する。この製品のrevoke_grantは、対応するrefresh tokenを停止すると同時に、発行済みaccess tokenも直ちにAPIで拒否する。一般のOAuth製品すべてに共通する即時失効仕様ではない。",
+      "APIの応答件数は送信完了したレコード数。相手側の保存や二次利用を示す数値ではない。ログ内のgrant・tokenタグは照合用の表示で、認証秘密は含まない。",
+      "資料は2026-10-05、JSTで同期。10:00〜10:30の全件監査を保全し、10:30の調査時点で11資料がすべて閲覧できる。診断はその前に採取した記録で、プレイヤーの選択で本番へ実要求を送らない。",
+      "資料時刻（observedAt）は、その資料の状態・範囲を観測した時刻。全件資料は収録終端、複数イベントは最後のイベント以後を示す。個別の出来事の時刻は本文に残し、「取得」は資料を調査へ揃えた時刻を示す。",
+      "全通信はHTTPS/TCP443。下記の向きは要求又は転送の開始方向で、応答も同じ通信に含む。線は用途を示し、現在の許否や正誤を色で表示しない。\n便札作成のL06はlabel.printサービス経路で、contactsの読取線ではない。今回、A_LABELからcontacts APIへの実要求はない。物理的な通信経路と、client/scopeに基づく許可条件は別の説明として表示する。本件に署名検証用の独立経路はなく、署名の線を追加しない。\n詳細表示と文字説明にアドレス・用途・境界を残す。観測点はN_IDPの認証/同意監査、N_APIの要求/応答監査、N_AUDITの保全記録。地図アプリの保存先や作成者は図から推測しない。"
+    ],
+    "snapshotTime": "2026-10-05T10:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_DESK",
+        "label": "受付PC",
+        "kind": "client",
+        "addresses": [
+          "DESK-1",
+          "10.71.10.21",
+          "境界：交換会の内部"
+        ]
+      },
+      {
+        "id": "N_IDP",
+        "label": "認証・同意",
+        "kind": "auth",
+        "addresses": [
+          "id.seed.example.test",
+          "192.0.2.71",
+          "境界：クラウド組織テナント"
+        ]
+      },
+      {
+        "id": "N_API",
+        "label": "受付サービス",
+        "kind": "service",
+        "addresses": [
+          "contacts.seed.example.test",
+          "192.0.2.72",
+          "境界：クラウド組織テナント"
+        ]
+      },
+      {
+        "id": "N_MAP",
+        "label": "地図まとめ",
+        "kind": "service",
+        "addresses": [
+          "route-helper.example.test",
+          "203.0.113.71",
+          "境界：外部事業者"
+        ]
+      },
+      {
+        "id": "N_LABEL",
+        "label": "便札作成",
+        "kind": "service",
+        "addresses": [
+          "labels.example.test",
+          "198.51.100.71",
+          "境界：別の外部事業者"
+        ]
+      },
+      {
+        "id": "N_AUDIT",
+        "label": "監査保管",
+        "kind": "monitor",
+        "addresses": [
+          "10.71.20.10",
+          "境界：組織の監査領域"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L01",
+        "from": "N_DESK",
+        "to": "N_IDP",
+        "label": "本人認証・同意操作（認証・同意の破線）"
+      },
+      {
+        "id": "L02",
+        "from": "N_DESK",
+        "to": "N_API",
+        "label": "本人による正規閲覧（データの実線）"
+      },
+      {
+        "id": "L03",
+        "from": "N_MAP",
+        "to": "N_IDP",
+        "label": "連携のトークン取得（認証・同意の破線）"
+      },
+      {
+        "id": "L04",
+        "from": "N_MAP",
+        "to": "N_API",
+        "label": "委任による読取（データの実線）"
+      },
+      {
+        "id": "L05",
+        "from": "N_LABEL",
+        "to": "N_IDP",
+        "label": "審査済み連携の認証（認証・同意の破線）"
+      },
+      {
+        "id": "L06",
+        "from": "N_LABEL",
+        "to": "N_API",
+        "label": "label.printサービス（データの実線）"
+      },
+      {
+        "id": "L07",
+        "from": "N_IDP",
+        "to": "N_AUDIT",
+        "label": "認証・同意監査の転送（監査の点線）"
+      },
+      {
+        "id": "L08",
+        "from": "N_API",
+        "to": "N_AUDIT",
+        "label": "API監査の転送（監査の点線）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "受付からの読取通知",
+      "kind": "report",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_DESK"
+      ],
+      "source": "受付担当の受付票",
+      "observedAt": "2026-10-05T10:24:00+09:00",
+      "observedAtLabel": "資料時刻・10:24:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "受付票には、外部連携A_MAPによる連絡先読取通知を受けたと記載。通知の対象はu17、表示件数は24件。"
+          },
+          {
+            "type": "text",
+            "body": "穂積の申告：「会場案内をまとめるため、自分で地図支援の同意画面を操作した。組織の審査済みかは確認していない」"
+          },
+          {
+            "type": "text",
+            "body": "これは通知と本人の申告を保全した受付票。通知だけで侵入経路、相手の保存、二次利用、他利用者への被害を断定する記録ではない。実際の連絡先本文は載せない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "外部連携の要件と審査台帳",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_IDP"
+      ],
+      "source": "正常要件・組織審査台帳",
+      "observedAt": "2026-10-05T10:00:00+09:00",
+      "observedAtLabel": "資料時刻・10:00:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "contacts.read：組織審査を通ったclient_idにのみ許可",
+              "承認済みclient_idの全一覧：",
+              "  A_LABEL / label.print",
+              "  A_CAL   / calendar.read",
+              "A_MAP：未申請",
+              "u17の保有連絡先：24件 / 他利用者の領域を含まない"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "審査済み一覧は2件で全件。表示名が似ていることや、受付本人が同意したことによって、この審査済み一覧に追加される扱いではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "本人認証と同意の監査",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_IDP"
+      ],
+      "source": "認証・同意サービスの全件監査",
+      "observedAt": "2026-10-05T10:30:00+09:00",
+      "observedAtLabel": "資料時刻・10:30:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "10:12 event=login user=u17 device=DESK-1",
+              "      method=password+mfa result=success",
+              "10:13 event=consent user=u17 client=A_MAP scope=contacts.read",
+              "      grant=G17 actor=user result=created"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "10:00〜10:30のu17のログイン・同意はこの2件が全件。対話MFAは同意時も成功している。パスワードやMFAの値は記録しない。ログインと同意は別イベントとして記録する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "稼働中の同意ポリシー",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_IDP"
+      ],
+      "source": "稼働設定とgrant状態の保全",
+      "observedAt": "2026-10-05T10:14:00+09:00",
+      "observedAtLabel": "資料時刻・10:14:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "userConsent=allow",
+              "approvalRequiredScopes=[]",
+              "grant=G17",
+              "subject=u17",
+              "client=A_MAP",
+              "scope=contacts.read",
+              "status=active",
+              "reviewed=false"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "10:14に保全した稼働値。approvalRequiredScopesは、同意に組織審査を要求するscopeの一覧。空の配列は指定なしを表す。grant_idは照合用の識別子で、認証秘密ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "連絡先APIの応答監査",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_API"
+      ],
+      "source": "連絡先APIの要求・応答監査",
+      "observedAt": "2026-10-05T10:20:00+09:00",
+      "observedAtLabel": "資料時刻・10:20:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "request=Q17",
+              "auth=oauth",
+              "grant=G17",
+              "subject=u17",
+              "client=A_MAP",
+              "scope=contacts.read",
+              "operation=list_contacts",
+              "count=24",
+              "response_complete=true",
+              "http=200"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "countは送信完了したレコード数。相手が保存したか、後で利用したかを表す値ではない。APIがアプリを組織審査済みと認定したというフィールドは、この監査にはない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "隔離テナントの同型動作確認",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "nodeIds": [
+        "N_IDP",
+        "N_API"
+      ],
+      "source": "調査前に採取した隔離テナントの固定試験",
+      "observedAt": "2026-10-05T10:25:00+09:00",
+      "observedAtLabel": "資料時刻・10:25:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "試験1 / 本番と同じapprovalポリシー",
+              "  未審査TEST_MAPへのuserConsent生成：success",
+              "  仮名のテスト連絡先2件の読取：success",
+              "試験2 / approvalRequiredScopes=[contacts.read]",
+              "  審査未済のcontacts.read同意：denied",
+              "  A_LABELのlabel.print：allowed"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "本番と分離したテナントの記録。テスト対象の連絡先は仮名データだけ。2件のテスト読取を、本番の24件に加算しない。本番の設定を修復した後のログではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "失効とセッションの仕様表",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_IDP",
+        "N_API"
+      ],
+      "source": "架空クラウドの失効仕様表",
+      "observedAt": "2026-10-05T10:26:00+09:00",
+      "observedAtLabel": "資料時刻・10:26:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "table",
+            "columns": [
+              "操作",
+              "この製品で変わるもの"
+            ],
+            "rows": [
+              [
+                "password_change",
+                "password credentialを更新。OAuth grantは変化しない"
+              ],
+              [
+                "revoke_grant",
+                "対応するrefresh tokenを停止し、発行済みaccess tokenも直ちにAPI拒否"
+              ],
+              [
+                "アプリ表示の削除",
+                "画面表示を削除。grantは変化しない"
+              ],
+              [
+                "PCログアウト",
+                "PC sessionを終了。OAuth grantは変化しない"
+              ]
+            ]
+          },
+          {
+            "type": "text",
+            "body": "userinfo/contacts APIは毎回grantの有効性を照合する。正規便札アプリA_LABELのgrantはG_LABELで、G17とは別の識別子。即時API拒否はこの製品の仕様で、一般のOAuthすべてに当てはめない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "API操作の収録範囲",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_API"
+      ],
+      "source": "grant G17の全API要求監査と利用可能範囲",
+      "observedAt": "2026-10-05T10:30:00+09:00",
+      "observedAtLabel": "資料時刻・10:30:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "収録期間：10:00〜10:30",
+              "G17の全API要求：Q17のみ",
+              "対象：受付担当u17の保有領域24件",
+              "contacts.write：scope不足で利用不能",
+              "他利用者読取：scope不足で利用不能",
+              "一括共有export：scope不足で利用不能"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "監査と製品仕様の範囲を示す。今回の記録にはシステム全件流出の観測がない。未観測の全社被害をこの一覧から断定しない。権限不足の操作を実際に試行したというログではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "地図支援の連携案内",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_MAP"
+      ],
+      "source": "連携案内画面の保全",
+      "observedAt": "2026-10-05T10:11:00+09:00",
+      "observedAtLabel": "資料時刻・10:11:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "画面説明：受付の場所案内をまとめます",
+              "表示名：地図まとめ",
+              "client_id=A_MAP",
+              "要求scope=contacts.read"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "表示名は組織審査結果ではない。誰がこのアプリを作成したかは、保全した資料では未特定。案内文の印象から作成者や悪意を決めない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "本人閲覧と便札処理の正常比較",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "nodeIds": [
+        "N_DESK",
+        "N_API"
+      ],
+      "source": "調査前に採取した正規業務の固定試験",
+      "observedAt": "2026-10-05T10:27:00+09:00",
+      "observedAtLabel": "資料時刻・10:27:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "DESK-1 / 本人contacts画面：24件表示 / http=200",
+              "A_LABEL / 便札処理：job=J14 / 完了",
+              "G_LABEL：active",
+              "読取API・TLS・認証サービス：稼働中"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "本人の閲覧と審査済み便札処理についての比較記録。正規業務が動くことは、別アプリの読取通知の内容を否定する判定ではない。本番修復後の確認結果でもない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "title": "会場マップの画像更新記録",
+      "kind": "alert",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_AUDIT"
+      ],
+      "source": "別件の公開画像キャッシュ記録",
+      "observedAt": "2026-10-05T09:20:00+09:00",
+      "observedAtLabel": "資料時刻・09:20:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T10:30:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "09:15に公開会場マップの画像キャッシュ更新が遅延し、09:20に解消。対象の公開CDNはcontacts APIとIdPの依存先ではない。この記録の対象にu17とG17は含まれない。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_LABEL",
+      "label": "便札アプリの予定処理",
+      "description": "審査済み便札作成アプリが予定された処理で連絡先を読み、受付へ通常の連携通知を返した"
+    },
+    {
+      "id": "H_POLICY",
+      "label": "同意ポリシーの審査不足",
+      "description": "連絡先読取の組織審査要件が同意ポリシーで強制されず、無審査アプリへの委任読取を許可した"
+    },
+    {
+      "id": "H_OUTAGE",
+      "label": "API停止による誤通知",
+      "description": "連絡先APIが停止し、正常な応答を出せない状態から誤った読取通知が作られた"
+    },
+    {
+      "id": "H_PASSWORD",
+      "label": "外部の対話ログイン",
+      "description": "外部からパスワードを使う対話ログインが行われ、そのログインで受付の連絡先が取得された"
+    },
+    {
+      "id": "H_PUBLIC",
+      "label": "匿名公開画面への配布",
+      "description": "連絡先が匿名で閲覧できる公開画面に配布され、ログインや委任を伴わず外部から取得された"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_ALL",
+        "label": "全利用者の全データ送信",
+        "description": "外部への読取通知をシステム全体の被害と捉え、全利用者の全データが送信された範囲として関係者へ報告する"
+      },
+      {
+        "id": "S_WRITE",
+        "label": "連絡先の改変のみ",
+        "description": "通知の影響を連絡先の改変として扱い、送信は起きていないと判断して、受付の内容訂正を中心に対応する"
+      },
+      {
+        "id": "S_G17",
+        "label": "本人領域24件の送信",
+        "description": "u17の連絡先24件がG17経由で無審査アプリへ送信された。相手側の保存や二次利用は未確認とする"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_LABEL",
+        "label": "便札アプリの予定処理",
+        "description": "審査済み便札作成アプリが予定された処理で連絡先を読み、受付へ通常の連携通知を返した"
+      },
+      {
+        "id": "H_POLICY",
+        "label": "同意ポリシーの審査不足",
+        "description": "連絡先読取の組織審査要件が同意ポリシーで強制されず、無審査アプリへの委任読取を許可した"
+      },
+      {
+        "id": "H_OUTAGE",
+        "label": "API停止による誤通知",
+        "description": "連絡先APIが停止し、正常な応答を出せない状態から誤った読取通知が作られた"
+      },
+      {
+        "id": "H_PASSWORD",
+        "label": "外部の対話ログイン",
+        "description": "外部からパスワードを使う対話ログインが行われ、そのログインで受付の連絡先が取得された"
+      },
+      {
+        "id": "H_PUBLIC",
+        "label": "匿名公開画面への配布",
+        "description": "連絡先が匿名で閲覧できる公開画面に配布され、ログインや委任を伴わず外部から取得された"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "F_MFA",
+        "label": "MFA成功でアプリも審査済み",
+        "description": "MFAで本人確認に成功しているため、同意した外部アプリの用途も組織審査済みと扱える",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_GRANT",
+        "label": "本人同意と実読取の対応",
+        "description": "u17が同意したG17を、A_MAPの連絡先読取に使用した",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "F_LABEL",
+        "label": "表示名で同じ権限と判断",
+        "description": "受付向けの表示名を使うアプリなら、審査済み便札アプリと同じ権限で連絡先を扱える",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C_POLICY",
+        "label": "審査要件と稼働ポリシー",
+        "description": "連絡先読取の審査要件を、稼働同意ポリシーが強制していない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_RESET",
+        "label": "パスワード変更で外部読取停止",
+        "description": "受付本人のパスワードを変更すれば、G17を使った外部読取も直ちに停止する",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_SCOPE",
+        "label": "期間全要求の確認範囲",
+        "description": "10:00〜10:30の全API要求を照合した確認範囲は、u17自身の連絡先24件の送信1回に限られる",
+        "requiredEvidenceCount": 2
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R_RESET",
+        "label": "パスワード変更で終息",
+        "description": "受付本人のパスワードを変更し、その変更を外部連携の停止手順として対処する。通知された読取を認証情報の更新で終息させ、同意設定やgrantは現状のままとする"
+      },
+      {
+        "id": "R_DELETE",
+        "label": "監査と通知の削除",
+        "description": "監査と連携通知を削除して受付画面を整理し、アプリの表示を消して外部連携への対処を終える。grantや同意ポリシーには変更を加えず、通知が消えた状態で受付を続ける"
+      },
+      {
+        "id": "R_STOP",
+        "label": "保全・失効と正規業務の維持",
+        "description": "監査と同意画面を保全し、G17を失効してcontacts.readの無審査同意を停止する。確認した24件を関係者へ報告し、正規A_LABELの便札処理は維持する"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_NAME",
+        "label": "表示名による審査省略",
+        "description": "表示名に受付向けの用途が書かれたアプリは審査を省略する。担当者が案内文を読んで選び、名前が仕事に合うことを連携利用の承認条件にする"
+      },
+      {
+        "id": "P_TLS",
+        "label": "TLS接続による安全判定",
+        "description": "APIのTLS証明書と接続状態を毎日確認する。正しい相手との暗号化通信を連携の安全判定とし、同意・scope・grantの審査や棚卸しは追加しない"
+      },
+      {
+        "id": "P_REVIEW",
+        "label": "審査・最小scopeと棚卸し",
+        "description": "連絡先読取は管理者審査を要求し、委任するscopeを最小にする。同意と実読取を監視し、grantの定期棚卸しで許可の継続を確認する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_LOGOUT",
+        "label": "PCログアウトで停止判定",
+        "description": "受付PCのログアウト画面を確認し、本人のセッション終了を外部連携の停止判定にする。画面にログイン状態が残っていなければ、grantやAPI要求は追加確認せず対処完了とする"
+      },
+      {
+        "id": "V_TLS",
+        "label": "TLS成功で完了判定",
+        "description": "APIとのTLS接続が正常であることを確認し、暗号化経路の確立を対処完了の判定にする。grantの拒否や同意制限は試さず、接続成功で受付の安全な利用を確認する"
+      },
+      {
+        "id": "V_PAIR",
+        "label": "失効・拒否と正規業務の対照",
+        "description": "G17の旧access/refreshと無審査contacts.read同意が拒否されること、承認済みlabel.printと本人閲覧が続くことを確認し、異常読取の停止を監査で確かめる"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "本人のログインと、外部アプリのAPI読取は別の出来事。記録の操作主体と認証方式を確認する。",
+      "evidenceIds": [
+        "E01",
+        "E03",
+        "E05"
+      ]
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "同意のgrant_id、client_id、要求scopeを対応させる。画面の表示名だけで同じアプリと扱わない。",
+      "evidenceIds": [
+        "E03",
+        "E05",
+        "E08"
+      ]
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "組織審査の要件・台帳と稼働同意ポリシーを照合する。停止操作がどの状態を変えるかも仕様表で確かめる。",
+      "evidenceIds": [
+        "E02",
+        "E04",
+        "E06",
+        "E07"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "OAuth",
+      "definition": "アプリへ一定の範囲のアクセスを委任するための仕組み。OAuthを使うこと自体でアプリの用途や安全性が審査済みになるわけではない"
+    },
+    {
+      "term": "委任",
+      "definition": "本人等が持つアクセスの一部を、別のアプリに任せること"
+    },
+    {
+      "term": "subject",
+      "definition": "許可やアクセスの対象となる主体の識別子"
+    },
+    {
+      "term": "client_id",
+      "definition": "連携アプリを識別する値。利用者向けの表示名とは別"
+    },
+    {
+      "term": "scope",
+      "definition": "アクセスを任せる範囲・操作の種類を示す識別子"
+    },
+    {
+      "term": "grant",
+      "definition": "アプリに一定のアクセスを認める許可。記録上の識別子と認証秘密は区別する"
+    },
+    {
+      "term": "access token",
+      "definition": "許可されたAPIアクセスに使う認証情報。実値を共有しない"
+    },
+    {
+      "term": "refresh token",
+      "definition": "条件の範囲で新しいaccess tokenの取得に使う認証情報。実値を共有しない"
+    },
+    {
+      "term": "MFA",
+      "definition": "複数の認証要素を使い、本人確認を強化する仕組み"
+    },
+    {
+      "term": "失効",
+      "definition": "与えた許可や認証情報を使えなくすること。具体的な反映方法と時点は製品仕様による"
+    },
+    {
+      "term": "監査",
+      "definition": "操作や状態の記録を残し、後から条件・主体・結果を確認できるようにすること"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_G17",
+    "causeId": "H_POLICY",
+    "repairId": "R_STOP",
+    "preventionId": "P_REVIEW",
+    "verificationId": "V_PAIR",
+    "claimRules": [
+      {
+        "claimId": "C_GRANT",
+        "requiredEvidenceSets": [
+          [
+            "E03",
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_POLICY",
+        "requiredEvidenceSets": [
+          [
+            "E04"
+          ],
+          [
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E02"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_SCOPE",
+        "requiredEvidenceSets": [
+          [
+            "E05",
+            "E08"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E02"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "criticalOptionIds": [
+      "R_DELETE"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：受付には、A_MAPによるu17の連絡先24件の読取通知が届きました。穂積は同意画面を自分で操作したと申告しています（E01）。通知だけで外部の対話ログインや全利用者の被害を決めず、認証・同意と実読取を確認します。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "確認した事実：期間中の本人ログインはDESK-1のpassword+mfa成功で、本人の同意がG17を作成しています（E03）。A_MAPはそのG17でcontacts.readを要求し、Q17は24件の送信を完了しました（E05）。G17の全API要求はQ17だけで、本人領域を対象とする範囲が分かります（E08）。相手の保存と二次利用はこの記録から分かりません。",
+        "evidenceIds": [
+          "E03",
+          "E05",
+          "E08"
+        ]
+      },
+      {
+        "text": "残る原因：実読取はoauth/G17によるもので、外部のパスワード対話ログインではありません（E03/E05）。便札アプリA_LABELの予定処理ともclientとscopeが異なり、匿名公開配布でもありません（E02/E05/E08）。API/TLSと本人閲覧・便札処理は稼働中です（E10）。正常なMFAやTLSだけでは、別アプリへの委任を適切に審査したことにはなりません。",
+        "evidenceIds": [
+          "E03",
+          "E05",
+          "E02",
+          "E08",
+          "E10"
+        ]
+      },
+      {
+        "text": "要件と実設定の不一致：contacts.readには組織審査が必要で、全承認一覧にA_MAPはありません（E02）。稼働ポリシーはuserConsentを許可し、approvalRequiredScopesを空にした状態でG17をactiveとしていました（E04）。組織審査要件を同意ポリシーが強制しないため、本人の同意から無審査アプリの読取が成立しました。隔離テナントの同型試験も、この条件で同意と読取が通る動作を示します（E06）。",
+        "evidenceIds": [
+          "E02",
+          "E04",
+          "E06"
+        ]
+      },
+      {
+        "text": "対策：監査と同意画面を保全し、G17を失効させ、contacts.readの無審査同意を止めます。対象24件の送信を関係者へ報告し、未確認の相手保存・二次利用まで断定しません（E05/E08）。この製品の失効は対応refreshと発行済accessを止めますが、パスワード変更、アプリ表示削除、PCログアウトは代替になりません（E07）。別grant G_LABELの正規便札処理を維持します（E07/E10）。",
+        "evidenceIds": [
+          "E05",
+          "E08",
+          "E07",
+          "E10"
+        ]
+      },
+      {
+        "text": "確認：今後の実施では、G17の旧access/refreshによる要求と、未審査contacts.read同意が拒否されることを試験します。同時に本人閲覧と承認済みlabel.printが続くことを確認し、監査で異常読取が停止したと確かめます（E07/E10）。これは復旧後の確認計画であり、保存済み資料から本番の対処完了を宣言するものではありません。対策を講じても、すでに送信した情報が相手側から消えたとは言えません。",
+        "evidenceIds": [
+          "E07",
+          "E10"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_LABEL": {
+        "text": "承認済みA_LABELの用途はlabel.print（E02）。実読取はclient=A_MAP/scope=contacts.readで、clientと用途が一致しない（E05）。A_LABELの正規処理成功は別の記録（E10）",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E10"
+        ]
+      },
+      "H_POLICY": {
+        "text": "contacts.readの審査要件・台帳と、userConsent=allow/approvalRequiredScopes=[]の稼働値が一致しない（E02/E04）。本人同意G17がA_MAPの読取に使われている（E03/E05）",
+        "evidenceIds": [
+          "E02",
+          "E04",
+          "E03",
+          "E05"
+        ]
+      },
+      "H_OUTAGE": {
+        "text": "Q17はhttp200、24件の応答送信完了（E05）。本人閲覧、API/TLS/認証サービスも稼働しており、停止による誤通知という説明に一致しない（E10）",
+        "evidenceIds": [
+          "E05",
+          "E10"
+        ]
+      },
+      "H_PASSWORD": {
+        "text": "期間中のu17の対話ログインはDESK-1のpassword+mfa成功だけ（E03）。Q17は外部アプリA_MAPによるoauth/G17の読取で、外部対話ログインによる取得とは方式が異なる（E05）。人物の無実を断定する説明ではない",
+        "evidenceIds": [
+          "E03",
+          "E05"
+        ]
+      },
+      "H_PUBLIC": {
+        "text": "Q17はoauth/G17/subject=u17を使う読取（E05）。本人領域への委任操作であり、公開匿名配布の記録ではない（E08）",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_G17": {
+        "text": "Q17はu17/A_MAP/G17の連絡先24件を送信完了している（E05）。全要求範囲はQ17だけで本人領域、他利用者読取とは区別できる（E08）。相手側の保存は応答監査から分からない",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "S_ALL": {
+        "text": "全利用者全データの送信は記録されていない。G17の全API要求はQ17だけで、本人領域24件と利用可能範囲が示されている（E08）。通知から範囲を拡大している",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "S_WRITE": {
+        "text": "記録された操作はlist_contacts、24件の応答送信完了（E05）。contacts.writeはscope不足で利用不能であり、改変のみという範囲は成立しない（E08）",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "H_POLICY": {
+        "text": "contacts.readの審査要件・台帳と、userConsent=allow/approvalRequiredScopes=[]の稼働値が一致しない（E02/E04）。本人同意G17がA_MAPの読取に使われている（E03/E05）",
+        "evidenceIds": [
+          "E02",
+          "E04",
+          "E03",
+          "E05"
+        ]
+      },
+      "H_PASSWORD": {
+        "text": "期間中のu17の対話ログインはDESK-1のpassword+mfa成功だけ（E03）。Q17は外部アプリA_MAPによるoauth/G17の読取で、外部対話ログインによる取得とは方式が異なる（E05）。人物の無実を断定する説明ではない",
+        "evidenceIds": [
+          "E03",
+          "E05"
+        ]
+      },
+      "H_LABEL": {
+        "text": "承認済みA_LABELの用途はlabel.print（E02）。実読取はclient=A_MAP/scope=contacts.readで、clientと用途が一致しない（E05）。A_LABELの正規処理成功は別の記録（E10）",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E10"
+        ]
+      },
+      "H_PUBLIC": {
+        "text": "Q17はoauth/G17/subject=u17を使う読取（E05）。本人領域への委任操作であり、公開匿名配布の記録ではない（E08）",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "H_OUTAGE": {
+        "text": "Q17はhttp200、24件の応答送信完了（E05）。本人閲覧、API/TLS/認証サービスも稼働しており、停止による誤通知という説明に一致しない（E10）",
+        "evidenceIds": [
+          "E05",
+          "E10"
+        ]
+      },
+      "C_GRANT": {
+        "text": "本人が作成した同意G17（E03）と、A_MAPがG17を使った応答（E05）を照合できる。どちらか一方では同意から実読取までの対応が不足する",
+        "evidenceIds": [
+          "E03",
+          "E05"
+        ]
+      },
+      "C_POLICY": {
+        "text": "公開された審査要件に対し、稼働設定（E04）又は同じポリシーの隔離試験（E06）の一枚で立証できる。審査台帳E02だけでは実際の強制状態を示さず、部分点となる",
+        "evidenceIds": [
+          "E04",
+          "E06",
+          "E02"
+        ]
+      },
+      "C_SCOPE": {
+        "text": "実応答の24件（E05）と、G17の全API要求・本人領域・利用可能範囲（E08）を対応させる。保有件数だけでは期間内の全要求の確認範囲を示さない",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "F_MFA": {
+        "text": "MFA成功は本人確認であり、アプリ用途の組織審査を代替しない。審査台帳と本人認証は別の条件（E02/E03）。誤主張は根拠を付けても0点",
+        "evidenceIds": [
+          "E02",
+          "E03"
+        ]
+      },
+      "F_LABEL": {
+        "text": "表示名とclient_idは別。A_MAPの要求はcontacts.read（E09）、A_LABELの承認用途はlabel.print（E02）。名前の印象から同じ権限は導けない",
+        "evidenceIds": [
+          "E09",
+          "E02"
+        ]
+      },
+      "F_RESET": {
+        "text": "password_changeはpassword credentialを更新するが、OAuth grantを変えない（E07）。G17の停止をその操作で確認したとは言えない",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "R_STOP": {
+        "text": "G17の失効が対応refreshと発行済accessを停止する仕様（E07）。無審査同意の停止も必要（E02/E04）。対象24件の送信を報告し（E05/E08）、別grantの正規処理を守る（E07/E10）。送信済み情報を回収済みとは言わない",
+        "evidenceIds": [
+          "E07",
+          "E02",
+          "E04",
+          "E05",
+          "E08",
+          "E10"
+        ]
+      },
+      "R_RESET": {
+        "text": "パスワード変更でOAuth grantは変化しない（E07）。G17の停止と無審査同意の制限が残る。一般的なパスワード変更を否定するのでなく、本件の停止手順として十分でない",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "R_DELETE": {
+        "text": "監査や画面を削除すればE03/E05/E09等の保全を損なう危険操作。表示の削除ではgrantは変わらない（E07）。読取能力も無審査同意も停止せず、送信した情報が消えるわけでもない",
+        "evidenceIds": [
+          "E03",
+          "E05",
+          "E09",
+          "E07"
+        ]
+      },
+      "P_REVIEW": {
+        "text": "審査要件を設定に反映する対策（E02/E04）。同意作成とAPI利用を別に監視することで、許可と実行を追える（E03/E05）。正規のlabel.printを維持する範囲も確認する（E06/E10）",
+        "evidenceIds": [
+          "E02",
+          "E04",
+          "E03",
+          "E05",
+          "E06",
+          "E10"
+        ]
+      },
+      "P_NAME": {
+        "text": "表示名は審査結果ではなく、実際のclient_id・要求scopeとも分けて確認する必要がある（E09）。要件の組織審査を案内文の印象で代替している（E02）",
+        "evidenceIds": [
+          "E09",
+          "E02"
+        ]
+      },
+      "P_TLS": {
+        "text": "TLSの正常性は委任用途の審査を保証しない。API/TLSが正常でもQ17は成立している（E05/E10）。審査要件と同意設定の不一致が残る（E02/E04）",
+        "evidenceIds": [
+          "E05",
+          "E10",
+          "E02",
+          "E04"
+        ]
+      },
+      "V_PAIR": {
+        "text": "停止すべき状態はG17の認証情報と未審査同意（E04/E07）。正規維持の対照は本人閲覧とA_LABEL（E10）。失効と正規業務の両条件を将来試験し、監査で読取停止を確認する計画である",
+        "evidenceIds": [
+          "E04",
+          "E07",
+          "E10"
+        ]
+      },
+      "V_LOGOUT": {
+        "text": "PCログアウトはPC sessionだけを終了する仕様（E07）。G17のaccess/refresh停止や未審査同意の拒否、正規連携の維持は画面から確認できない",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "V_TLS": {
+        "text": "本件の読取時点でもAPI/TLSは正常（E05/E10）。TLS成功ではG17拒否と未審査同意拒否、正規業務の維持を確認できない（E07）。経路の確認だけでは不足する",
+        "evidenceIds": [
+          "E05",
+          "E10",
+          "E07"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "症状と本人申告。通知だけで真因・侵入者・相手保存を確定しない",
+      "E02": "審査要件、全承認一覧、保有領域・件数。C_POLICY/C_SCOPE補助",
+      "E03": "期間内の本人認証と同意作成の全件。C_GRANTの同意側、外部対話ログイン説の反証",
+      "E04": "本番稼働ポリシーとG17状態。C_POLICYの実設定側",
+      "E05": "G17/A_MAPの実応答24件。C_GRANTの利用側、C_SCOPEの実送信側",
+      "E06": "同型・隔離試験による設定と動作。C_POLICYの一枚で成立する代替満点。本番修復後の成功資料ではない",
+      "E07": "失効等の操作効果とG_LABELの独立性。修復・確認・誤停止策の判定",
+      "E08": "G17の期間全要求と利用可能範囲。C_SCOPEの範囲側、全件流出・改変説の反証",
+      "E09": "案内の目的、client/scope、表示名。作成者や悪意は未確定",
+      "E10": "本人閲覧・便札・サービス正常。停止説の反証と維持する正規業務の比較",
+      "E11": "別件。時刻、依存先、記録対象で今回の委任読取とは結び付かない。正主張の矛盾証拠ではない"
+    }
+  }
+}

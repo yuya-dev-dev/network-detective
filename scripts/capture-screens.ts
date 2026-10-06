@@ -43,7 +43,7 @@ try {
     .locator(".title-background")
     .evaluate((image) => (image as HTMLImageElement).decode());
   await capture("01-title");
-  await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
+  await page.getByRole("button", { name: "ベーシックモードを選ぶ", exact: true }).click();
   await capture("02-list");
   await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
   await capture("03-brief");

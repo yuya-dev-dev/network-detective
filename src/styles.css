@@ -1507,3 +1507,30 @@ summary {
 .conversation-controls { display:flex;gap:16px;align-items:center;justify-content:flex-end; }
 .conversation-controls span { color:#a7b3c2;font-size:0.85rem; }
 .case-files { display:grid;gap:8px; }
+
+/* Three investigation modes share the existing title artwork. */
+.title-content { padding-top: clamp(60px, 12svh, 140px); padding-bottom: 64px; }
+.title-tagline { margin: 18px 0 22px; }
+.title-modes { display: grid; gap: 10px; }
+.title-mode-button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 72px; padding: 13px 16px; text-align: left; color: #e5edf3; background: #090c10df; border: 1px solid #566472; border-radius: 4px; }
+.title-mode-button:hover, .title-mode-button:focus-visible { border-color: #72d9ec; background: #111d25; }
+.title-mode-button strong { display: block; font-size: 1rem; letter-spacing: .08em; }
+.title-mode-button small { display: block; margin-top: 5px; font-size: .72rem; color: #aebfca; line-height: 1.5; }
+.mode-count { display: flex; align-items: center; gap: 10px; flex-shrink: 0; color: #72d9ec; font-size: .75rem; }
+.mode-count b { font-size: 1.2rem; }
+.mode-description { color: #aebfca; margin: 0 0 20px; }
+.mode-empty { padding: 24px 20px; }
+.map-security { min-height: 180px; }
+.map-link.audit { stroke-dasharray: 2 4; }
+.map-link.copy { stroke-dasharray: 8 3 2 3; }
+.map-link.test { stroke-width: 1; }
+.map-link.certificate { stroke-width: 1; stroke-dasharray: 4 4; }
+@media (max-height: 700px) {
+  .title-content { padding-top: 64px; padding-bottom: 46px; }
+  .title-content h1 { font-size: 3rem; }
+  .title-tagline { margin: 12px 0 16px; }
+  .title-modes { gap: 8px; }
+  .title-mode-button { min-height: 66px; padding: 10px 12px; }
+  .title-footnote { margin-top: 12px; }
+  .title-edition { bottom: 12px; }
+}

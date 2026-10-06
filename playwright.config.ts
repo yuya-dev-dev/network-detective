@@ -15,12 +15,12 @@ export default defineConfig({
     { name: "chromium-desktop", testIgnore: "maps.spec.ts", use: { browserName: "chromium", viewport: { width: 1280, height: 900 } } },
     {
       name: "chromium-mobile",
-      testIgnore: "episodes.spec.ts",
+      testMatch: "maps.spec.ts",
       use: { ...devices["Pixel 7"], browserName: "chromium" },
     },
     {
       name: "webkit-mobile",
-      testIgnore: "episodes.spec.ts",
+      testMatch: "maps.spec.ts",
       use: { ...devices["iPhone 13"], browserName: "webkit" },
     },
   ],

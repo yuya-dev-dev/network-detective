@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { playableScenario as scenario } from "../../src/scenario/load";
 import type { PlayableScenario } from "../../src/scenario/types";
+import { modes, modeForCase } from "../../src/scenario/modes";
 import type { Report } from "../../src/game/types";
 export const tab = (page: Page, name: string) =>
   page
@@ -13,7 +14,7 @@ export async function openReportGroup(page: Page, field: string) {
 }
 export async function start(page: Page, caseId = "case01") {
   await page.goto("/");
-  await page.getByRole("button", { name: "捜査を始める", exact: true }).click();
+  await page.getByRole("button", { name: `${modes.find(mode => mode.id === modeForCase(caseId))!.label}モードを選ぶ`, exact: true }).click();
   await page.locator(`[data-case-id="${caseId}"]`).getByRole("button", { name: "依頼を開く" }).click();
   await page.getByRole("button", { name: "現場の調査を始める" }).click();
   await expect(tab(page, "構成")).toBeVisible();

@@ -16,6 +16,7 @@ import { Investigation, type Tab } from "../ui/Investigation";
 import { ResultView } from "../ui/ResultView";
 import { EvidenceView } from "../ui/EvidenceView";
 import { useBgm } from "../audio/useBgm";
+import { modes, modeHash, modeForCase, listModeFromHash } from "../scenario/modes";
 type View = {
   screen: "title" | "list" | "brief" | "investigation" | "result";
   tab: Tab;
@@ -98,6 +99,9 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
   const [view, setView] = useState<View>(read),
     [glossary, showGlossary] = useState(false),
     [hints, showHints] = useState(false);
+  const modeId = listModeFromHash(location.hash, entry.mode);
+  const mode = modes.find(mode => mode.id === modeId)!;
+  const visibleCases = cases.filter(candidate => candidate.mode === modeId);
   const [thought, think] = useState(() => narrative.tabs[read().tab]);
   const positions = useRef<Record<string, number>>({});
   const previousHash = useRef(location.hash || "#list");
@@ -141,13 +145,16 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
     return () => window.removeEventListener("hashchange", change);
   }, []);
   useEffect(() => {
+    const routedId = caseIdFromHash(location.hash) ?? (/^#(brief|investigation|result)(\/|$)/.test(location.hash) ? "case01" : null);
+    // The parent is switching providers; only the destination case may redirect.
+    if (routedId && routedId !== scenario.id) return;
     if (
       (view.screen === "investigation" ||
         view.screen === "brief" ||
         view.screen === "result") &&
       !attempt
     ) {
-      history.replaceState(null, "", "#list");
+      history.replaceState(null, "", modeHash(modeForCase(scenario.id)));
       setView(read());
     } else if (
       locked &&
@@ -167,7 +174,7 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
       dispatch({ type: "COMPLETE" });
   }, [view.screen, attempt?.phase]);
   const navigate = (target: string) => {
-    const next = target === "#list" || target === "#title" ? target : hash(target.slice(1));
+    const next = target === "#list" ? modeHash(view.screen === "list" ? modeId : entry.mode) : target.startsWith("#list/") || target === "#title" ? target : hash(target.slice(1));
     if (location.hash !== next) location.hash = next;
   };
   const open = (id: string) => {
@@ -219,7 +226,7 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
           ? narrative.retryThought
           : narrative.requestThought
         : view.screen === "list"
-          ? narrative.roomThought
+          ? entry.mode === modeId ? narrative.roomThought : mode.thought
           : view.evidenceId
             ? narrative.evidenceThoughts[
                 view.evidenceId as keyof typeof narrative.evidenceThoughts
@@ -279,27 +286,30 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
                 通信<span>捜査室</span>
               </h1>
               <p className="title-tagline">記録を読み、真相をつなぐ。</p>
-              <button className="title-start" onClick={() => navigate("#list")}>
-                <span>捜査を始める</span>
-                <span aria-hidden="true">↗</span>
-              </button>
+              <nav className="title-modes" aria-label="モード選択">
+                {modes.map(mode => <button key={mode.id} className="title-mode-button" onClick={() => navigate(modeHash(mode.id))} aria-label={`${mode.label}モードを選ぶ`}>
+                  <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
+                  <span className="mode-count">{mode.caseIds.length ? `${mode.caseIds.length}事件` : "追加予定"}<b aria-hidden="true">↗</b></span>
+                </button>)}
+              </nav>
               <p className="title-footnote">
-                全6事件 · 中断して再開できます
+                全{cases.length}事件 · 中断して再開できます
               </p>
             </div>
-            <span className="title-edition">A NETWORK MYSTERY / 6 CASE FILES</span>
+            <span className="title-edition">A NETWORK MYSTERY / {cases.length} CASE FILES</span>
           </section>
         )}
         {view.screen === "list" && (
           <section>
             <div className="section-heading case-heading">
               <div>
-                <span className="eyebrow">CASE FILES</span>
-                <h1>受信した依頼</h1>
+                <span className="eyebrow">{modeId.toUpperCase()} / CASE FILES</span>
+                <h1>{mode.label}</h1>
               </div>
-              <span className="stamp">{cases.length} FILES</span>
+              <span className="stamp">{visibleCases.length} FILES</span>
             </div>
-            <CaseList selectedId={scenario.id} currentSave={save} choose={id => void selectCase(id)} />
+            <p className="mode-description">{mode.description}</p>
+            {visibleCases.length ? <CaseList entries={visibleCases} selectedId={scenario.id} currentSave={save} choose={id => void selectCase(id)} /> : <article className="paper-card mode-empty"><span className="eyebrow">NEXT CASES</span><h2>新しい依頼は、まだ届いていない。</h2><p>ネットワークモードの事件は今後追加します。ベーシックとセキュリティの事件を先に遊べます。</p></article>}
             <p className="offline-status" role="status">
               <span className={`dot ${offline.ready ? "ready" : ""}`} />
               {offline.ready
