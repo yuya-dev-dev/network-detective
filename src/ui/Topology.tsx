@@ -21,7 +21,7 @@ function NetworkMap({ scenario, selected, choose, zoom }: { scenario: PlayableSc
   const arrow = useId().replace(/:/g, "") + "-arrow";
   return <div className={`map-panel ${zoom ? "map-expanded" : `map-overview${layout.legend ? " map-security" : ""}`}`}>
     <svg viewBox={`0 0 ${layout.width} ${layout.height}`} role="group" aria-label="ネットワーク構成図：線種と矢印の意味は図中と文字説明の凡例を参照" style={zoom ? {width:layout.width*zoom,height:layout.height*zoom} : undefined}>
-      <defs><marker id={arrow} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a9bccd"/></marker></defs>
+      <defs><marker id={arrow} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--map-line)"/></marker></defs>
       <text x="14" y="16" className="map-caption">NETWORK TOPOLOGY / CASE {scenario.id.slice(4)}</text>
       {layout.zones.map((z,i)=><g key={i} className="map-zone"><rect x={z.x} y={z.y} width={z.width} height={z.height} rx="3"/><text x={z.x+7} y={z.y+13}>{z.label}</text></g>)}
       {scenario.topology.links.map(link=>{
@@ -41,7 +41,7 @@ function NetworkMap({ scenario, selected, choose, zoom }: { scenario: PlayableSc
         const hitHeight = layout.legend ? 84 : Math.max(84,layout.height*0.21);
         return <g key={n.id} role="button" tabIndex={0} aria-label={`${n.label}の詳細`} data-node-id={n.id} onClick={()=>choose(n.id)} onKeyDown={e=>{if(e.key === "Enter" || e.key === " "){e.preventDefault();choose(n.id);}}}>
           <title>{n.label + " / " + n.addresses.join(" / ")}</title>
-          <rect className="map-node" x={x-76} y={y-32} width="152" height="64" rx="3" stroke={selected === n.id ? "#72d9ec" : "#73879a"} strokeWidth={selected === n.id ? "2.5" : "1.2"}/>
+          <rect className="map-node" x={x-76} y={y-32} width="152" height="64" rx="3" stroke={selected === n.id ? "var(--accent)" : "var(--map-node-border)"} strokeWidth={selected === n.id ? "2.5" : "1.2"}/>
           <g className="device-symbol" transform={`translate(${x-68} ${y-25})`}><DeviceIcon kind={n.kind}/></g>
           <text x={x+12} y={y-10} className="map-node-title">{spec.title ?? n.label}</text>
           {lines.map((line,i)=><text key={i} x={x} y={y+9+i*14} className="map-address">{line}</text>)}

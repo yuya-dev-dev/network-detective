@@ -10,7 +10,8 @@ src/
   scenario/    型・実行時検証・プレイヤー用データの投影
   game/        報告型・純粋な採点関数・reducer
   storage/     localStorageの読込検証・保存
-  app/         Provider・画面遷移・保存と採点の接続
+  app/         Provider・画面遷移・保存と採点の接続・表示モード
+  audio/       標準再生BGM・短い操作効果音・音声の開始と解放
   ui/          構成図・証拠・仮説・報告・結果・共通部品
   pwa/         登録・更新通知・Service Workerテンプレート
   main.tsx
@@ -53,7 +54,7 @@ UIは採点せず、表示と操作を担当する。画面遷移はhashで管�
 
 Service Workerはビルド資産全体のハッシュをキャッシュ世代に使う。事件JSONもアプリへ同梱されるため世代を混在させない。取得完了後はキャッシュから起動する。更新は一覧で保存成功後に適用し、他タブがある場合は停止する。
 
-インストBGM「The Midnight Ledger」はGeminiで生成した約62秒の音源。`public/audio/investigation.mp3` は64kbps・約494KBで、ビルドとService Workerのキャッシュへ同梱する。初期状態はOFF。明示的なON操作でループ再生し、ページ非表示または `pagehide` で停止する。再表示による自動復帰は行わず、再生には再度ON操作を必要とする。生成記録と音源の詳細は `AUDIO.md` に記載する。
+インストBGM「The Midnight Ledger」はGeminiで生成した約62秒の音源。`public/audio/investigation.mp3` は64kbps・約494KBで、ビルドとService Workerのキャッシュへ同梱する。2026-10-07の要望により音声ON/OFFボタンを撤去し、BGMと短い電子クリック効果音は標準で有効。最初の操作で再生を開始し、ページ非表示または `pagehide` で停止する。再表示による自動復帰は行わず、次の操作から再開する。生成記録と音源の詳細は `AUDIO.md` に記載する。
 
 ## 実装したタスクの順序
 

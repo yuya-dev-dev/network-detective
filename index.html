@@ -7,6 +7,12 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#090c10" />
+    <script>
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem("network-detective:theme") === "white" ? "white" : "dark";
+      } catch {}
+    </script>
     <meta
       name="description"
       content="構成図と証拠を手がかりに、通信障害を調査する小さな推理ゲーム。"

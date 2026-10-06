@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cases, caseNumber, caseHash, caseIdFromHash, findCase, type CaseEntry } from "../scenario/registry";
 import type { PlayableScenario } from "../scenario/types";
 import { GameProvider, useGame } from "./GameProvider";
@@ -15,7 +15,8 @@ import {
 import { Investigation, type Tab } from "../ui/Investigation";
 import { ResultView } from "../ui/ResultView";
 import { EvidenceView } from "../ui/EvidenceView";
-import { useBgm } from "../audio/useBgm";
+import { useGameAudio } from "../audio/useGameAudio";
+import { useTheme } from "./useTheme";
 import { modes, modeHash, modeForCase, listModeFromHash } from "../scenario/modes";
 type View = {
   screen: "title" | "list" | "brief" | "investigation" | "result";
@@ -54,6 +55,19 @@ function readView(scenario: PlayableScenario): View {
 }
 type Selection = { id: string; token: number } | null;
 export default function App() {
+  useGameAudio();
+  const appearance = useTheme();
+  const themeButton = (
+    <button className="theme-toggle"
+      aria-label={appearance.theme === "dark" ? "ホワイトモードに切り替える" : "ダークモードに切り替える"}
+      title={appearance.theme === "dark" ? "ホワイトモードに切り替える" : "ダークモードに切り替える"}
+      onClick={appearance.toggle}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        {appearance.theme === "dark" ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></> : <path d="M20 15.5A9 9 0 0 1 8.5 4a9 9 0 1 0 11.5 11.5Z" />}
+      </svg>
+      <small>{appearance.theme === "dark" ? "ホワイト" : "ダーク"}</small>
+    </button>
+  );
   const [selectedId, select] = useState(() => caseIdFromHash(location.hash) ?? "case01");
   const [selection, request] = useState<Selection>(null);
   useEffect(() => {
@@ -68,34 +82,16 @@ export default function App() {
   }, []);
   const entry = findCase(selectedId) ?? cases[0];
   return <GameProvider key={entry.scenario.id} scenario={entry.scenario} solution={entry.solution}>
-    <CaseApp entry={entry} selection={selection} consumed={() => request(null)} choose={id => { select(id); request({ id, token: Date.now() }); }} />
+    <CaseApp entry={entry} themeButton={themeButton} selection={selection} consumed={() => request(null)} choose={id => { select(id); request({ id, token: Date.now() }); }} />
   </GameProvider>;
 }
-function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; selection: Selection; consumed: () => void; choose: (id: string) => void }) {
+function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: CaseEntry; themeButton: ReactNode; selection: Selection; consumed: () => void; choose: (id: string) => void }) {
   const { scenario, narrative, solution } = entry;
   const read = () => readView(scenario);
   const hash = (route: string) => caseHash(scenario.id, route);
   const number = caseNumber(scenario.id);
   const { save, saved, notice, dispatch, begin, flush } = useGame();
   const offline = useOffline();
-  const bgm = useBgm();
-  const musicButton = (
-    <button
-      className="bgm-toggle"
-      aria-label={bgm.enabled ? "BGMをOFFにする" : "BGMをONにする"}
-      aria-pressed={bgm.enabled}
-      disabled={bgm.busy}
-      title={
-        bgm.error
-          ? "音声を再生できませんでした。もう一度タップしてください"
-          : `BGM ${bgm.enabled ? "ON" : "OFF"}`
-      }
-      onClick={() => void bgm.toggle()}
-    >
-      <span aria-hidden="true">♪</span>
-      <small>{bgm.enabled ? "ON" : "OFF"}</small>
-    </button>
-  );
   const [view, setView] = useState<View>(read),
     [glossary, showGlossary] = useState(false),
     [hints, showHints] = useState(false);
@@ -256,7 +252,7 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
               {saved ? "保存中断可" : "保存不可"}
             </span>
             <button onClick={() => showGlossary(true)}>用語辞典</button>
-            {musicButton}
+            {themeButton}
           </div>
         </header>
       )}
@@ -278,7 +274,7 @@ function CaseApp({ entry, selection, consumed, choose }: { entry: CaseEntry; sel
             <div className="title-shade" />
             <div className="title-topline">
               <span>NETWORK INVESTIGATION ROOM</span>
-              {musicButton}
+              {themeButton}
             </div>
             <div className="title-content">
               <p className="title-kicker">記録の向こうに、答えがある。</p>
