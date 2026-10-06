@@ -3,12 +3,24 @@ import { pwaServer } from "../helpers/pwaServer";
 import { readAll, fill, submit, tab, openReportGroup } from "../helpers/play";
 import { correctReport } from "../helpers/report";
 import { storageKey } from "../../src/storage/localStorage";
+type PwaAudioWindow = Window & { offlineSource?: AudioBufferSourceNode };
 test("cached application and case play completely offline under a subdirectory", async ({
   page,
   context,
   browserName,
   browser,
 }) => {
+  await page.addInitScript(() => {
+    const OriginalContext = window.AudioContext;
+    if (!OriginalContext) return;
+    window.AudioContext = class extends OriginalContext {
+      createBufferSource() {
+        const source = super.createBufferSource();
+        (window as PwaAudioWindow).offlineSource = source;
+        return source;
+      }
+    };
+  });
   const server = await pwaServer();
   try {
     await page.goto(`${server.url}#list`);
@@ -47,10 +59,12 @@ test("cached application and case play completely offline under a subdirectory",
         .evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0),
     ).toBe(true);
     if (await page.evaluate(() => typeof AudioContext === "function")) {
-      await page.getByRole("button", { name: "BGMをONにする" }).click();
-      await expect(
-        page.getByRole("button", { name: "BGMをOFFにする" }),
-      ).toHaveAttribute("aria-pressed", "true");
+      await page.getByRole("button", { name: "ホワイトモードに切り替える" }).click();
+      await expect.poll(() => page.evaluate(() => {
+        const source = (window as PwaAudioWindow).offlineSource;
+        return source?.context.state === "running" && source.loop &&
+          (source.buffer?.duration ?? 0) > 60;
+      })).toBe(true);
     } else {
       // Windows WebKit lacks AudioContext. Verify cached bytes without claiming playback.
       expect(

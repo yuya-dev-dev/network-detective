@@ -30,6 +30,10 @@ test("basic and security investigation drafts survive mode switches without shar
   await tab(page,"報告").click();
   await openReportGroup(page,"scopeId");
   await page.locator('input[name="scopeId"]').first().check();
+  await expect.poll(() => page.evaluate(key =>
+    JSON.parse(localStorage.getItem(key) ?? "{}").activeAttempt?.reportDraft.scopeId,
+    storageKey("case01"),
+  )).toBe(await page.locator('input[name="scopeId"]').first().inputValue());
   const before = await page.evaluate(key => localStorage.getItem(key), storageKey("case01"));
   await page.getByRole("button",{name:"事件一覧へ",exact:true}).click();
   await page.getByRole("button",{name:"タイトルへ戻る"}).click();
@@ -42,6 +46,10 @@ test("basic and security investigation drafts survive mode switches without shar
   await tab(page,"報告").click();
   await openReportGroup(page,"scopeId");
   await page.locator('input[name="scopeId"]').last().check();
+  await expect.poll(() => page.evaluate(key =>
+    JSON.parse(localStorage.getItem(key) ?? "{}").activeAttempt?.reportDraft.scopeId,
+    storageKey("case07"),
+  )).toBe(await page.locator('input[name="scopeId"]').last().inputValue());
   const securityBefore = await page.evaluate(key => localStorage.getItem(key),storageKey("case07"));
   await page.getByRole("button",{name:"事件一覧へ",exact:true}).click();
   await page.getByRole("button",{name:"タイトルへ戻る"}).click();
