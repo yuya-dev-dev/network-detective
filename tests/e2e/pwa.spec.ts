@@ -39,7 +39,7 @@ test("cached application and case play completely offline under a subdirectory",
     const response = await page.reload();
     expect(response?.fromServiceWorker()).toBe(true);
     await expect(
-      page.getByRole("button", { name: "捜査を始める", exact: true }),
+      page.getByRole("button", { name: "ベーシックモードを選ぶ", exact: true }),
     ).toBeVisible();
     expect(
       await page
@@ -62,10 +62,10 @@ test("cached application and case play completely offline under a subdirectory",
       ).toBeGreaterThan(400_000);
     }
     await page
-      .getByRole("button", { name: "捜査を始める", exact: true })
+      .getByRole("button", { name: "ベーシックモードを選ぶ", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "受信した依頼", exact: true }),
+      page.getByRole("heading", { name: "ベーシック", exact: true }),
     ).toBeVisible();
     await page.locator('[data-case-id="case01"]').getByRole("button", { name: "依頼を開く" }).click();
     await page.getByRole("button", { name: "現場の調査を始める" }).click();
@@ -75,16 +75,28 @@ test("cached application and case play completely offline under a subdirectory",
     await expect(page.locator(".score")).toHaveText("100/100");
     await page.reload();
     await expect(page.locator(".score")).toHaveText("100/100");
-    // All additional topology/data bundles must also be available from the real cache.
+    // All basic and security topology/data bundles must be available from the real cache.
     for (const id of ["case02","case03","case04","case05","case06"]) {
       await page.getByRole("button", {name:"事件一覧へ",exact:true}).last().click();
       await page.locator(`[data-case-id="${id}"]`).getByRole("button", {name:"依頼を開く"}).click();
       await page.getByRole("button", {name:"現場の調査を始める"}).click();
       await expect(page.locator(".map-overview")).toBeVisible();
     }
+    await page.getByRole("button", {name:"事件一覧へ",exact:true}).click();
+    await page.getByRole("button", {name:"タイトルへ戻る"}).click();
+    await page.getByRole("button", {name:"セキュリティモードを選ぶ",exact:true}).click();
+    for (const id of ["case07","case08","case09","case10","case11"]) {
+      await page.locator(`[data-case-id="${id}"]`).getByRole("button", {name:"依頼を開く"}).click();
+      await page.getByRole("button", {name:"現場の調査を始める"}).click();
+      await expect(page.locator(".map-overview")).toBeVisible();
+      await tab(page, "証拠").click();
+      await expect(page.locator(".evidence-card").first()).toBeVisible();
+      await page.getByRole("button", {name:"事件一覧へ",exact:true}).click();
+    }
+    await page.locator('[data-case-id="case11"]').getByRole("button", {name:"続きから調査する"}).click();
     const lastReload = await page.reload();
     expect(lastReload?.fromServiceWorker()).toBe(true);
-    await expect(page.locator(".investigation-toolbar")).toContainText("CASE 06");
+    await expect(page.locator(".investigation-toolbar")).toContainText("CASE 11");
   } finally {
     if (browserName !== "webkit") await context.setOffline(false);
     await server.close();
@@ -131,7 +143,7 @@ test("updates wait for the list, require saving and protect other open tabs", as
     const other = await context.newPage();
     await other.goto(`${server.url}#list`);
     await expect(
-      other.getByRole("heading", { name: "受信した依頼", exact: true }),
+      other.getByRole("heading", { name: "ベーシック", exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "事件一覧へ", exact: true }).click();
     await page

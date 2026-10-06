@@ -1,0 +1,1103 @@
+{
+  "schemaVersion": 1,
+  "id": "case09",
+  "revision": 1,
+  "title": "防災訓練、封をしたつもりの連絡票",
+  "type": "security",
+  "difficulty": 2,
+  "estimatedMinutes": 16,
+  "prerequisites": [
+    "区間TLS・署名・内容暗号化の概要（用語辞典で確認できます）"
+  ],
+  "brief": "防災訓練の連絡所から受入施設へ送った未公開の配備連絡票について、配送サービスの内容索引に添付の識別語が現れました。受信側からは署名が有効との返信があり、連絡係は何が守られたのか分からず戸惑っています。本文と添付は送信端末と指定受信端末だけが復号でき、外部配送サービスは転送や保存をしても機密本文を読めない必要があります。件名や宛先まで隠す要件ではありません。送信形式、配送、保管、設定を照合し、確認できた扱いと未確認の被害を分けてください。正規の送受信と署名検証を保ちながら記録を残し、既に送った票の扱いと今後の保護を整える計画をお願いします。",
+  "context": {
+    "baseline": [
+      "本文と添付の配備情報は送信端末と指定受信端末だけで復号できること。外部配送サービスは転送・一時保存できても、機密本文を読めないこと。件名・宛先等の外側ヘッダーの秘匿は対象外。正規の送受信と署名検証も維持する。"
+    ],
+    "assumptions": [
+      "架空メール製品の正常profile Confidentialはsign_and_encrypt。内側を送信者の秘密鍵で署名し、そのMIME内容を受信者向けEnvelopedDataで暗号化する。署名は送信者公開鍵とCA chainで検証する。内容共通鍵は受信者公開鍵で包み、受信者秘密鍵で復号する。送受信者の秘密鍵を端末から持ち出さない。",
+      "multipart/signedは本文を隠す形式ではない。base64は転送符号化で暗号ではない。各TLS接続は中継で終端され、次のTLS接続を開始する。外部relayは受信メールをそのまま一時保存するが、受信者の秘密鍵は所有しない。通常の中継処理と、本件で必要な内容の秘匿を区別する。",
+      "12:00〜12:35、JST同期の固定調査。Message-IDと内容hashタグを対応させる。全10資料は最初から存在し任意順。診断は保全メールの複製と合成データだけを使った記録で、実メールを変更しない。",
+      "資料時刻（observedAt）は、その資料の状態・範囲を観測した時刻。全件資料は収録終端、複数イベントは最後のイベント以後を示す。個別の出来事の時刻は本文に残し、「取得」は資料を調査へ揃えた時刻を示す。",
+      "区間TLS錠前はその接続の保護を表し、保存内容のE2E暗号化を示さない。E2E内容包絡はメール形式の別凡例で示す。署名も包絡とは別のマークと文字で説明し、封筒の絵だけで保護対象を決めさせない。証明書確認線は配送線や秘密鍵の転送線ではない。\n観測点は送信MIME、配送接続、一時保管索引、受信署名検証。ノードと境界は詳細表示・文字説明でも読める。"
+    ],
+    "snapshotTime": "2026-10-05T12:35:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "N_SEND",
+        "label": "連絡所PC",
+        "kind": "client",
+        "addresses": [
+          "10.73.10.23",
+          "境界：送信者"
+        ]
+      },
+      {
+        "id": "N_SUB",
+        "label": "送信受付",
+        "kind": "service",
+        "addresses": [
+          "submit.drill.example.test",
+          "192.0.2.73",
+          "境界：送信者の送信サービス"
+        ]
+      },
+      {
+        "id": "N_RELAY",
+        "label": "外部中継",
+        "kind": "service",
+        "addresses": [
+          "relay.delivery.example.test",
+          "198.51.100.73",
+          "境界：配送事業者"
+        ]
+      },
+      {
+        "id": "N_IN",
+        "label": "受信箱",
+        "kind": "service",
+        "addresses": [
+          "inbox.shelter.example.test",
+          "203.0.113.73",
+          "境界：受信組織"
+        ]
+      },
+      {
+        "id": "N_RECV",
+        "label": "受入PC",
+        "kind": "client",
+        "addresses": [
+          "10.73.60.23",
+          "境界：受信組織の指定端末"
+        ]
+      },
+      {
+        "id": "N_CA",
+        "label": "証明書確認",
+        "kind": "service",
+        "addresses": [
+          "ca.training.example.test",
+          "192.0.2.174",
+          "境界：訓練用認証局"
+        ]
+      },
+      {
+        "id": "N_ARCH",
+        "label": "一時保管",
+        "kind": "storage",
+        "addresses": [
+          "198.51.100.74",
+          "境界：配送事業者"
+        ]
+      },
+      {
+        "id": "N_LAB",
+        "label": "解析コピー",
+        "kind": "test",
+        "addresses": [
+          "10.73.70.23",
+          "境界：隔離診断"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L01",
+        "from": "N_SEND",
+        "to": "N_SUB",
+        "label": "SMTP submission STARTTLS/TCP587（配送の実線・区間TLS錠前）"
+      },
+      {
+        "id": "L02",
+        "from": "N_SUB",
+        "to": "N_RELAY",
+        "label": "SMTP/TCP25、STARTTLS必須（配送の実線・区間TLS錠前）"
+      },
+      {
+        "id": "L03",
+        "from": "N_RELAY",
+        "to": "N_IN",
+        "label": "SMTP/TCP25、STARTTLS必須（配送の実線・区間TLS錠前）"
+      },
+      {
+        "id": "L04",
+        "from": "N_RECV",
+        "to": "N_IN",
+        "label": "IMAPS/TCP993、受信取得（配送の実線・区間TLS錠前）"
+      },
+      {
+        "id": "L05",
+        "from": "N_RELAY",
+        "to": "N_ARCH",
+        "label": "内部保存通信TLS/TCP443（保管の点線・区間TLS錠前）"
+      },
+      {
+        "id": "L06",
+        "from": "N_SEND",
+        "to": "N_CA",
+        "label": "HTTPS/TCP443、証明書取得（証明書確認の細い破線）"
+      },
+      {
+        "id": "L07",
+        "from": "N_RECV",
+        "to": "N_CA",
+        "label": "HTTPS/TCP443、証明書検証（証明書確認の細い破線）"
+      },
+      {
+        "id": "L08",
+        "from": "N_SEND",
+        "to": "N_LAB",
+        "label": "保全メール複製の論理関係（複製の点破線、実ネットワーク通信とは別）"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "連絡所の申告と内容索引通知",
+      "kind": "report",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SEND"
+      ],
+      "source": "連絡所の送信申告",
+      "observedAt": "2026-10-05T12:24:00+09:00",
+      "observedAtLabel": "資料時刻・12:24:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "連絡所から受入施設へメールM53を送った。受信者から「署名が有効」との返信。配送サービスの自動内容索引に添付の識別語が現れたため、何が保護されていたか確認したい。"
+          },
+          {
+            "type": "text",
+            "body": "施設外への公開、不正な人による閲覧は未確認。配備本文や個人情報は掲載しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "未公開配備連絡票の要件",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SEND"
+      ],
+      "source": "配布要件・機密分類の台帳",
+      "observedAt": "2026-10-05T12:00:00+09:00",
+      "observedAtLabel": "資料時刻・12:00:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "本文・添付の配備情報：指定受信端末以外で読取不可",
+              "外側ヘッダー：秘匿要件の対象外",
+              "正規配送と署名：維持",
+              "承認受信者：desk@shelter.example.test",
+              "受信者証明書：RC73",
+              "M53：この機密分類に該当"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "送信端末と指定受信端末で内容を扱うための要件。件名・宛先の見え方だけで機密本文の保護を判定しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "保全した送信MIMEの解析",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SEND"
+      ],
+      "source": "送信メールの保全形式解析",
+      "observedAt": "2026-10-05T12:20:00+09:00",
+      "observedAtLabel": "資料時刻・12:20:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "Message-ID=M53",
+              "recipient=desk@shelter.example.test（この宛先のみ）",
+              "outer_type=multipart/signed",
+              "part1=multipart/mixed",
+              "      text/plain + attachment application/pdf",
+              "      attachment transfer=base64",
+              "part2=application/pkcs7-signature",
+              "cms=SignedData",
+              "EnvelopedData_count=0",
+              "content_hash=BODY53"
+            ]
+          },
+          {
+            "type": "table",
+            "columns": [
+              "欄",
+              "形式上の意味"
+            ],
+            "rows": [
+              [
+                "multipart/signed",
+                "内容と署名を部として持つ形式"
+              ],
+              [
+                "multipart/mixed",
+                "本文と添付など複数部をまとめる形式"
+              ],
+              [
+                "transfer=base64",
+                "添付を転送用文字列へ符号化する方式"
+              ],
+              [
+                "SignedData",
+                "CMSの署名データ形式"
+              ],
+              [
+                "EnvelopedData_count",
+                "受信者向け暗号包絡が含まれる数"
+              ],
+              [
+                "content_hash",
+                "保全内容を照合する表示用タグ"
+              ]
+            ]
+          },
+          {
+            "type": "text",
+            "body": "この表は形式の意味を説明する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "保管コピーと暗号化合成メールの対照",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "nodeIds": [
+        "N_LAB"
+      ],
+      "source": "原物保全後の解析コピー・合成データ固定診断",
+      "observedAt": "2026-10-05T12:28:00+09:00",
+      "observedAtLabel": "資料時刻・12:28:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "保管コピー：object=ARC53 content_hash=BODY53",
+              "隔離パーサー：秘密鍵なし / 復号関数なし",
+              "処理：MIME解析・base64解析のみ",
+              "結果：添付の合成識別語FIELD-53を取得",
+              "暗号化済み合成メール：T54",
+              "recipient秘密鍵なし：content読取不可",
+              "RC73対応秘密鍵を持つ合成受信端末：content読取可"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "原物は保全し、解析用コピーだけを使った。FIELD-53は合成識別語で配備情報の実文ではない。ARC53の本番索引の生成履歴はこの診断には含まない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "受信側の署名検証",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "nodeIds": [
+        "N_RECV",
+        "N_CA"
+      ],
+      "source": "受信署名・合成改変コピーの固定検証",
+      "observedAt": "2026-10-05T12:26:00+09:00",
+      "observedAtLabel": "資料時刻・12:26:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "message=M53 sender_certificate=SC73",
+              "chain_valid=true",
+              "expiry_valid=true",
+              "revocation=good",
+              "message_signature=valid",
+              "sender_identity=verified",
+              "合成本文コピーを1文字変更：signature=invalid"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "送信者の署名検証は改変検知に機能している。CA公開鍵だけで本文を復号した試験ではない。署名の実値と秘密鍵は非表示。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "区間配送とTLSの記録",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SUB",
+        "N_RELAY",
+        "N_IN"
+      ],
+      "source": "M53の配送接続監査",
+      "observedAt": "2026-10-05T12:22:00+09:00",
+      "observedAtLabel": "資料時刻・12:22:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "message=M53",
+              "L01 / TLS1 / verified=true",
+              "L02 / TLS2 / verified=true",
+              "L03 / TLS3 / verified=true",
+              "L04 / TLS4 / verified=true",
+              "queue=delivered",
+              "最終受信=12:22",
+              "中間事業者=relay.delivery.example.test"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "各接続は別session IDで、各機器でTLSを終端する。区間途中のTLS失敗はない。配送接続の保護と、中継が一時保存するメール形式は別の条件。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "稼働profileと承認テンプレート",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SEND"
+      ],
+      "source": "送信profile・証明書用途の保全",
+      "observedAt": "2026-10-05T12:18:00+09:00",
+      "observedAtLabel": "資料時刻・12:18:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "稼働：分類confidential → profile SAFE_SIGN",
+              "      SAFE_SIGN sign=true encrypt=false",
+              "承認テンプレートConfidential：",
+              "      sign=true encrypt=true",
+              "      required_recipient_certificate=RC73",
+              "12:10更新：profile名をSAFE_SIGNに置換",
+              "RC73：導入済み / emailEncryption / 有効 / 未失効",
+              "RC73対応復号秘密鍵：受信端末だけに保管",
+              "SC73：送信者署名用途"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "profile名と処理の値は別に記録する。秘密鍵そのものは掲載しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "配送保管の索引監査",
+      "kind": "log",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_RELAY",
+        "N_ARCH"
+      ],
+      "source": "一時保管・内容索引の全件監査",
+      "observedAt": "2026-10-05T12:35:00+09:00",
+      "observedAtLabel": "資料時刻・12:35:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "log",
+            "lines": [
+              "12:00〜12:35 / 機密連絡票送信：M53のみ",
+              "索引生成イベント時刻=12:23",
+              "message=M53",
+              "archive=ARC53",
+              "content_hash=BODY53",
+              "index_word=FIELD-53",
+              "source=attachment",
+              "index=generated",
+              "recipient=desk@shelter.example.test"
+            ]
+          },
+          {
+            "type": "text",
+            "body": "M53と保管物を照合できる監査。内容索引が生成された範囲は観測済み。人物による閲覧はこの監査の対象外で、施設外への公開も確定しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "復旧計画の制約と既存保管の扱い",
+      "kind": "config",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_SEND",
+        "N_RECV"
+      ],
+      "source": "送受信の対応状況・事業者取扱是正の計画",
+      "observedAt": "2026-10-05T12:29:00+09:00",
+      "observedAtLabel": "資料時刻・12:29:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "受信RC73は有効。送信側・受信側はE2E暗号化に対応済み。外部relayは受信者秘密鍵を持たず、暗号化メールをそのまま転送できる。"
+          },
+          {
+            "type": "text",
+            "body": "M53、ARC53、索引を保全した後、事業者へ索引・保管のアクセス制限と取扱是正を依頼する。履歴保全のため即消去で対処しない。暗号化して再送しても、既に送信したデータの二次利用を取り消すことはできない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "公開案内Webの証明書更新通知",
+      "kind": "alert",
+      "acquisition": "document",
+      "nodeIds": [
+        "N_CA"
+      ],
+      "source": "前日の別用途証明書通知",
+      "observedAt": "2026-10-04T15:00:00+09:00",
+      "observedAtLabel": "資料時刻・15:00:00",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "取得：2026-10-05T12:35:00+09:00。保全済み資料として提示。"
+          },
+          {
+            "type": "text",
+            "body": "前日15:00、公開訓練案内Web証明書WEB73の更新案内があり、更新完了。SC73/RC73とは用途・鍵・名前が異なり、M53の配送に使う証明書ではない。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H_KEY",
+      "label": "relayへの復号秘密鍵配布",
+      "description": "受信者の復号秘密鍵を外部relayへ配布したため、中継サービスが暗号化内容を復号して索引にした"
+    },
+    {
+      "id": "H_TLS",
+      "label": "外部中継へのTLS失敗",
+      "description": "外部中継へのTLS接続に失敗したため保護なしで配送され、区間途中から内容が読める状態になった"
+    },
+    {
+      "id": "H_WRONG",
+      "label": "未承認宛先への誤送信",
+      "description": "未承認の宛先へ配備連絡票を誤送信し、意図しない受信者が配送サービスを通して受け取った"
+    },
+    {
+      "id": "H_CA",
+      "label": "無効な署名による改変",
+      "description": "送信者の署名が無効で内容が改変され、その変更によって添付の識別語が配送索引へ入った"
+    },
+    {
+      "id": "H_PROFILE",
+      "label": "機密分類の署名のみprofile",
+      "description": "機密分類が署名のみprofileへ割り当てられ、指定受信者向けのE2E内容暗号化を省いて配送された"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S_ARCH",
+        "label": "配送保管と添付内容索引",
+        "description": "M53の本文・添付が配送保管で読取可能な形式となり、添付の内容索引が生成された範囲とする。人物閲覧や外部公開は未確認"
+      },
+      {
+        "id": "S_PUBLIC",
+        "label": "全訓練資料のネット公開",
+        "description": "索引への表示を公開被害として扱い、全訓練資料がインターネットへ公開された範囲として報告する。関係資料全体を公開済みとして対応する"
+      },
+      {
+        "id": "S_DELIVERY",
+        "label": "連絡票の配送停止",
+        "description": "影響を連絡票の配送停止と捉え、受信側へ内容が届いていない範囲として報告する。未着の連絡を届け直すことを主な対応にする"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H_KEY",
+        "label": "relayへの復号秘密鍵配布",
+        "description": "受信者の復号秘密鍵を外部relayへ配布したため、中継サービスが暗号化内容を復号して索引にした"
+      },
+      {
+        "id": "H_TLS",
+        "label": "外部中継へのTLS失敗",
+        "description": "外部中継へのTLS接続に失敗したため保護なしで配送され、区間途中から内容が読める状態になった"
+      },
+      {
+        "id": "H_WRONG",
+        "label": "未承認宛先への誤送信",
+        "description": "未承認の宛先へ配備連絡票を誤送信し、意図しない受信者が配送サービスを通して受け取った"
+      },
+      {
+        "id": "H_CA",
+        "label": "無効な署名による改変",
+        "description": "送信者の署名が無効で内容が改変され、その変更によって添付の識別語が配送索引へ入った"
+      },
+      {
+        "id": "H_PROFILE",
+        "label": "機密分類の署名のみprofile",
+        "description": "機密分類が署名のみprofileへ割り当てられ、指定受信者向けのE2E内容暗号化を省いて配送された"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "F_HOP",
+        "label": "区間TLSなら保管もE2E秘匿",
+        "description": "各配送区間のTLSが成功すれば、配送サービスに保存された内容もE2Eで秘匿される",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C_READ",
+        "label": "relay保管監査の内容索引",
+        "description": "秘密鍵を持たない外部relayの保管監査で、M53/ARC53の添付内容索引が生成されたことを確認できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_CA",
+        "label": "CA公開鍵で内容を復号",
+        "description": "CA公開鍵で、指定受信者向けに暗号化された本文を復号できる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_GAP",
+        "label": "機密要件と稼働profile",
+        "description": "機密分類のE2E要件に対し、稼働profileはencrypt=falseである",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "F_SIGN",
+        "label": "署名validなら中継でも秘密",
+        "description": "署名検証がvalidなら、本文と添付は中継事業者からも秘密になっている",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C_SIGN",
+        "label": "署名付き形式と暗号包絡",
+        "description": "M53は署名付きだが、本文・添付を包む暗号化EnvelopedDataがない",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R_ENCRYPT",
+        "label": "保全・内容暗号化と保管是正",
+        "description": "M53・ARC53・索引・設定を保全し、機密分類をsign_and_encryptへ戻して検証したRC73で暗号化する。事業者の保管・索引の取扱制限と影響報告を進め、正規配送を維持する"
+      },
+      {
+        "id": "R_TLS",
+        "label": "TLS再接続で保護回復",
+        "description": "配送区間のTLSを再接続し、証明書検証と暗号化接続を取り直して保護を回復する。送信profileと既存保管の扱いは変更せず、区間接続の正常性を対処として配送を続ける"
+      },
+      {
+        "id": "R_EXPORT",
+        "label": "復号秘密鍵をrelayへ渡す",
+        "description": "受信者の復号秘密鍵をrelayへ渡し、中継で暗号化処理と確認を代行してもらう。配送サービスが内容を開けるようにして送受信を続け、端末側の鍵保管条件は緩める"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P_POLICY",
+        "label": "分類検査と暗号化回帰試験",
+        "description": "分類ごとの暗号化必須条件を送信前に検査し、証明書の用途・期限を点検する。署名のみとの差を合成メールで回帰試験し、秘匿条件を満たせなければ送信を拒否する"
+      },
+      {
+        "id": "P_ICON",
+        "label": "封筒アイコンによる保護判定",
+        "description": "送信画面の封筒アイコンを確認し、保護を示す表示があれば送信を許可する。profileの処理値やメール形式を検査せず、画面の表示を毎回の保護判定にする"
+      },
+      {
+        "id": "P_ARCH",
+        "label": "内容索引を全員に無期限開放",
+        "description": "配送保管の内容索引を全員へ無期限に開放し、関係者がいつでも配備情報を探せるようにする。秘匿条件の検査より参照の容易さを優先して保管サービスを運用する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V_END",
+        "label": "読取・復号・署名と配送の対照",
+        "description": "合成機密メールがrelayでは鍵なし読取不可、指定端末では復号・署名検証成功、誤鍵では復号不可を確認する。配送と送信要件を維持し、既保管の取扱是正状況も確認する"
+      },
+      {
+        "id": "V_SIGN",
+        "label": "署名validで完了判定",
+        "description": "受信したメールの署名がvalidであることを確認し、保護の完了条件にする。中継での鍵なし読取や復号条件は試さず、署名の有効性で本文の秘匿も確認済みとする"
+      },
+      {
+        "id": "V_TLS",
+        "label": "区間TLS成功で完了判定",
+        "description": "各配送区間のTLS successを確認し、暗号化された接続で届けば対処完了とする。メール形式、指定端末の復号、保管の取扱是正は追加で試験せず配送を再開する"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "守りたいのは本文・添付か、配送の一接続か。署名と暗号化が確かめる対象を分ける。",
+      "evidenceIds": [
+        "E02",
+        "E03",
+        "E06"
+      ]
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "メール形式と保管コピーの試験を比較する。秘密鍵なしで実施した処理と、索引生成の記録を対応させる。",
+      "evidenceIds": [
+        "E03",
+        "E04",
+        "E08"
+      ]
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "機密分類の稼働profileと承認テンプレート、受信者証明書の用途を照合する。区間TLSの再接続が内容保護の代わりになるかも考える。",
+      "evidenceIds": [
+        "E07",
+        "E09"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "S/MIME",
+      "definition": "メールの署名や暗号化に使う仕組み。署名と暗号化は別の保護を行う"
+    },
+    {
+      "term": "署名",
+      "definition": "公開鍵等で検証し、署名者との対応や内容の改変を確かめるためのデータ。内容を隠す機能とは別"
+    },
+    {
+      "term": "公開鍵",
+      "definition": "対応する秘密鍵と組になる、検証や暗号化に用いる鍵。用途に応じた証明書の確認が必要"
+    },
+    {
+      "term": "秘密鍵",
+      "definition": "署名や復号等に用いる、持ち主が厳重に保護する鍵。公開鍵と同じ扱いで配布しない"
+    },
+    {
+      "term": "共通鍵",
+      "definition": "暗号化と復号に使う鍵を共有する方式の鍵。内容暗号化にも用いられる"
+    },
+    {
+      "term": "EnvelopedData",
+      "definition": "受信者向けに暗号化した内容と、鍵に関する情報を持つCMS形式"
+    },
+    {
+      "term": "TLS終端",
+      "definition": "TLS接続の保護がその機器で終わること。次の接続は別に開始される"
+    },
+    {
+      "term": "E2E暗号化",
+      "definition": "送信側から指定受信側まで内容を暗号化し、中間処理者に復号させない保護"
+    },
+    {
+      "term": "base64",
+      "definition": "データを転送向けの文字列に表す符号化。復号秘密鍵を必要とする暗号化とは異なる"
+    },
+    {
+      "term": "CA",
+      "definition": "証明書の発行・検証の信頼関係に関わる認証局。CAの公開鍵は受信者の復号秘密鍵ではない"
+    },
+    {
+      "term": "MIME",
+      "definition": "メールの本文や添付の種類・構造を表す形式"
+    },
+    {
+      "term": "fail-closed",
+      "definition": "必要な保護や検証を満たせない場合に、許可する側へ進まず拒否する設計"
+    }
+  ],
+  "solution": {
+    "scopeId": "S_ARCH",
+    "causeId": "H_PROFILE",
+    "repairId": "R_ENCRYPT",
+    "preventionId": "P_POLICY",
+    "verificationId": "V_END",
+    "claimRules": [
+      {
+        "claimId": "C_SIGN",
+        "requiredEvidenceSets": [
+          [
+            "E03"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_READ",
+        "requiredEvidenceSets": [
+          [
+            "E08"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E01",
+          "E04"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C_GAP",
+        "requiredEvidenceSets": [
+          [
+            "E07"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E02",
+          "E09"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "criticalOptionIds": [
+      "R_EXPORT",
+      "P_ARCH"
+    ],
+    "causalChain": [
+      {
+        "text": "症状：M53は受信側から署名有効と返信されましたが、配送サービスの索引に添付識別語が現れています（E01）。守る対象は本文と添付であり、件名・宛先の外側ヘッダーの秘匿ではありません（E02）。公開や人の閲覧をすぐに断定せず、保護の範囲を確認します。",
+        "evidenceIds": [
+          "E01",
+          "E02"
+        ]
+      },
+      {
+        "text": "確認した事実：送信形式はmultipart/signed/SignedDataで、本文・添付を包むEnvelopedDataはありません（E03）。秘密鍵を持たない外部relayの保管監査で、M53/ARC53/BODY53の添付内容索引生成が確認できます（E08）。解析コピーも秘密鍵と復号関数なしで合成識別語を取得できる対照です（E04）。申告と解析コピーは参考になりますが、本番の保管監査を要求する主張には、その監査を示す根拠が必要です。",
+        "evidenceIds": [
+          "E03",
+          "E08",
+          "E04"
+        ]
+      },
+      {
+        "text": "残る原因：署名は有効で、改変コピーの署名は無効になります（E05）。各区間TLSも正常で、最終受信まで配送されています（E06）。承認宛先と実宛先は一致し（E02/E03/E08）、relayが受信秘密鍵を持つ必要なく、解析コピーは読めています（E04/E09）。署名と区間TLSは機能していますが、内容を中継から隠す保護とは別です。",
+        "evidenceIds": [
+          "E05",
+          "E06",
+          "E02",
+          "E03",
+          "E08",
+          "E04",
+          "E09"
+        ]
+      },
+      {
+        "text": "要件と実設定の不一致：機密配備情報は指定受信端末以外で読めない要件です（E02）。承認テンプレートはsign=true/encrypt=trueですが、12:10更新後の稼働confidential分類はSAFE_SIGNのencrypt=falseへ割り当てられています（E07）。この内容暗号化の省略により、署名だけのM53が中継で保存され、内容索引を生成できる状態になりました（E03/E08）。",
+        "evidenceIds": [
+          "E02",
+          "E07",
+          "E03",
+          "E08"
+        ]
+      },
+      {
+        "text": "対策：M53、ARC53、索引、設定を保全し、機密分類をsign_and_encryptへ戻します。検証した受信者証明書RC73で内容を暗号化し、秘密鍵は受信端末だけに置きます（E07）。正規配送を維持し、既保管のアクセス制限と取扱是正を事業者へ依頼し、確認した範囲を報告します（E09）。暗号化再送で既送信データの保存や二次利用を取り消したとは言いません。",
+        "evidenceIds": [
+          "E07",
+          "E09"
+        ]
+      },
+      {
+        "text": "確認：今後は合成機密メールで、relayでは秘密鍵なしに内容を読めず、指定受信端末では復号と署名検証が成功し、誤鍵では復号できないことを確認します。正常配送と送信要件も維持し、既保管の取扱是正状況を確認します（E04/E05/E09）。固定試験を本番復旧後の成功に置き換えず、まだ未実施の確認は計画として渡します。外部公開や人の閲覧を確認済みとは報告しません。",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E09"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H_KEY": {
+        "text": "保管コピーは秘密鍵も復号関数もない解析で読める（E04）。秘密鍵は受信端末のみでrelayは所有しない仕様（E07/E09）。秘密鍵侵害一般を全世界で否定する意味ではない",
+        "evidenceIds": [
+          "E04",
+          "E07",
+          "E09"
+        ]
+      },
+      "H_TLS": {
+        "text": "M53のL01〜L04はすべてTLS verified=trueで、区間途中の失敗はない（E06）。区間TLSが正常でも中継で終端し保管するので、E2E内容の保護とは別",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "H_WRONG": {
+        "text": "承認先はdesk@shelter.example.test（E02）、送信M53の宛先はその一つだけ（E03）、保管監査のrecipientも一致する（E08）。誤宛先という説明に一致しない",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E08"
+        ]
+      },
+      "H_CA": {
+        "text": "署名と証明書chain・期限・失効検査は有効、改変コピーは署名無効になる（E05）。署名無効による改変を示す資料ではない",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "H_PROFILE": {
+        "text": "稼働confidential→SAFE_SIGNはencrypt=falseで、承認テンプレートと異なる（E07）。M53には署名があるが暗号包絡がない（E03）。鍵なし読取と索引生成に対応する（E04/E08）",
+        "evidenceIds": [
+          "E07",
+          "E03",
+          "E04",
+          "E08"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S_ARCH": {
+        "text": "保管コピーは鍵なし解析で添付識別語を取得でき（E04）、M53/ARC53の添付索引生成が記録されている（E08）。人の閲覧や公開は監査範囲に含まれない",
+        "evidenceIds": [
+          "E04",
+          "E08"
+        ]
+      },
+      "S_PUBLIC": {
+        "text": "期間の機密連絡票はM53だけで、確認したのは保管と索引生成（E08）。全訓練資料のネット公開や人の閲覧を示す記録ではなく、範囲を広げすぎている",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "S_DELIVERY": {
+        "text": "M53はqueue delivered、最終受信12:22（E06）。受信署名の検証も成立している（E05）。未着という範囲は記録に一致しない",
+        "evidenceIds": [
+          "E06",
+          "E05"
+        ]
+      },
+      "H_PROFILE": {
+        "text": "稼働confidential→SAFE_SIGNはencrypt=falseで、承認テンプレートと異なる（E07）。M53には署名があるが暗号包絡がない（E03）。鍵なし読取と索引生成に対応する（E04/E08）",
+        "evidenceIds": [
+          "E07",
+          "E03",
+          "E04",
+          "E08"
+        ]
+      },
+      "H_TLS": {
+        "text": "M53のL01〜L04はすべてTLS verified=trueで、区間途中の失敗はない（E06）。区間TLSが正常でも中継で終端し保管するので、E2E内容の保護とは別",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "H_CA": {
+        "text": "署名と証明書chain・期限・失効検査は有効、改変コピーは署名無効になる（E05）。署名無効による改変を示す資料ではない",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "H_WRONG": {
+        "text": "承認先はdesk@shelter.example.test（E02）、送信M53の宛先はその一つだけ（E03）、保管監査のrecipientも一致する（E08）。誤宛先という説明に一致しない",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E08"
+        ]
+      },
+      "H_KEY": {
+        "text": "保管コピーは秘密鍵も復号関数もない解析で読める（E04）。秘密鍵は受信端末のみでrelayは所有しない仕様（E07/E09）。秘密鍵侵害一般を全世界で否定する意味ではない",
+        "evidenceIds": [
+          "E04",
+          "E07",
+          "E09"
+        ]
+      },
+      "C_SIGN": {
+        "text": "送信MIMEにmultipart/signed/SignedDataとEnvelopedData_count=0がある（E03）。一枚で形式を確認できる",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "C_READ": {
+        "text": "外部relayは受信者秘密鍵を持たない公開仕様で、保管監査E08にM53/ARC53の添付内容索引生成があるため一枚で成立する。E01+E04は申告と解析コピーで、本番の保管監査を示さないため5点。鍵なしで内容を扱えることは公開relay仕様とこの監査から確認できる",
+        "evidenceIds": [
+          "E08",
+          "E01",
+          "E04"
+        ]
+      },
+      "C_GAP": {
+        "text": "稼働設定と承認テンプレートが同じ資料にあり、公開要件との不一致はE07一枚で示せる。要件E02や対応状況E09だけでは稼働値を示さず部分点",
+        "evidenceIds": [
+          "E07",
+          "E02",
+          "E09"
+        ]
+      },
+      "F_SIGN": {
+        "text": "署名は改変等の検証で内容秘匿とは別（E05）。送信形式と鍵なし読取が、この秘匿保証の主張に反する（E03/E04）",
+        "evidenceIds": [
+          "E05",
+          "E03",
+          "E04"
+        ]
+      },
+      "F_HOP": {
+        "text": "接続は各機器で終端（E06）。配送保管には添付内容索引が生成されており（E08）、TLS成功から保存内容のE2E秘匿は導けない",
+        "evidenceIds": [
+          "E06",
+          "E08"
+        ]
+      },
+      "F_CA": {
+        "text": "内容共通鍵を包むのは受信者公開鍵、復号するのは対応する受信者秘密鍵。RC73の鍵保管とE2E対応仕様（E07/E09）はCA公開鍵による復号ではない",
+        "evidenceIds": [
+          "E07",
+          "E09"
+        ]
+      },
+      "R_ENCRYPT": {
+        "text": "承認profileと有効な受信者証明書を使う（E07）。双方とrelayは暗号化配送に対応し、既保管の制限・是正は保全後に進められる（E09）。再送だけで既送信の扱いを取り消さない",
+        "evidenceIds": [
+          "E07",
+          "E09"
+        ]
+      },
+      "R_TLS": {
+        "text": "区間TLSはすでに正常（E06）。署名のみのメール形式と稼働profileが残る（E03/E07）。接続の取り直しだけでは内容暗号化と既保管の取扱是正を行わない",
+        "evidenceIds": [
+          "E06",
+          "E03",
+          "E07"
+        ]
+      },
+      "R_EXPORT": {
+        "text": "受信者秘密鍵を外部へ渡す危険操作。指定端末以外に内容を読ませない要件と秘密鍵保管仕様に反する（E02/E07/E09）。relayは秘密鍵なしで暗号化メールを転送できる",
+        "evidenceIds": [
+          "E02",
+          "E07",
+          "E09"
+        ]
+      },
+      "P_POLICY": {
+        "text": "分類と実処理の値を検査し（E02/E07）、鍵なし/指定鍵の対照で内容保護を確認する（E04）。署名検証と正常配送も別に維持する（E05/E09）",
+        "evidenceIds": [
+          "E02",
+          "E07",
+          "E04",
+          "E05",
+          "E09"
+        ]
+      },
+      "P_ICON": {
+        "text": "形式上の署名と内容暗号化は別で（E03）、profile名だけでもencrypt=falseを見落とす（E07）。表示だけでは機密分類の保護条件を確認できない",
+        "evidenceIds": [
+          "E03",
+          "E07"
+        ]
+      },
+      "P_ARCH": {
+        "text": "機密本文を指定受信端末以外に読ませない要件へ反する危険操作（E02）。既保管のアクセス制限・是正とも逆方向（E09）で、秘匿不備を恒久化する",
+        "evidenceIds": [
+          "E02",
+          "E09"
+        ]
+      },
+      "V_END": {
+        "text": "鍵なし/指定鍵の読取条件と署名を分けて試す（E04/E05）。誤鍵拒否も確認計画に含め、配送継続と既保管の是正を確認する（E09）。本番完了済みのログではない",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E09"
+        ]
+      },
+      "V_SIGN": {
+        "text": "M53の署名はすでに有効（E05）でも、保管コピーは鍵なしで読める（E04）。署名だけでは暗号化と既保管の扱いを確認できない",
+        "evidenceIds": [
+          "E05",
+          "E04"
+        ]
+      },
+      "V_TLS": {
+        "text": "M53は各TLS区間正常でも内容索引が生成された（E06/E08）。区間の成功だけではE2E内容保護、受信復号、既保管の是正を確認できない",
+        "evidenceIds": [
+          "E06",
+          "E08"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "症状と受信の返信。C_READ補助。索引生成の申告であり、本番保管監査や人の閲覧を確定する資料ではない",
+      "E02": "配布要件・宛先・機密分類。C_GAP補助と誤宛先説の反証",
+      "E03": "送信MIMEとhash、署名/暗号包絡の形式。C_SIGNの一枚立証\n表示上の制作条件：通知の原因や、この資料の重要度を表示する注釈は付けない。",
+      "E04": "保管コピーの鍵なし読取と暗号化合成対照。C_READ補助、本番索引の生成自体は含まない",
+      "E05": "有効な署名と改変対照。署名無効説の反証、秘匿の保証ではない",
+      "E06": "TLS区間・終端・配送正常。TLS失敗/配送停止説の反証",
+      "E07": "稼働profile/承認テンプレート/証明書用途。C_GAPの一枚立証",
+      "E08": "秘密鍵を持たない外部relayの本番保管監査としてM53/ARC53/hash/添付索引生成を示す。C_READ一枚立証、人閲覧は対象外",
+      "E09": "暗号化対応・秘密鍵保管・取扱是正制約。C_GAP補助と安全工程",
+      "E10": "前日の公開Web用別証明書。今回のメール鍵・用途とは異なるノイズ、矛盾証拠ではない"
+    }
+  }
+}

@@ -1,9 +1,9 @@
-import { cases, caseNumber } from "../scenario/registry";
+import { caseNumber, type CaseEntry } from "../scenario/registry";
 import { loadSave } from "../storage/localStorage";
 import type { GameSave } from "../game/types";
 const levels = ["", "初級", "中級", "上級", "発展"];
-export function CaseList({ selectedId, currentSave, choose }: { selectedId: string; currentSave: GameSave; choose: (id: string) => void }) {
-  return <div className="case-files">{cases.map(({ scenario, solution }) => {
+export function CaseList({ entries, selectedId, currentSave, choose }: { entries: CaseEntry[]; selectedId: string; currentSave: GameSave; choose: (id: string) => void }) {
+  return <div className="case-files">{entries.map(({ scenario, solution }) => {
     const save = scenario.id === selectedId ? currentSave : loadSave(() => localStorage, scenario, solution).save;
     const attempt = save.activeAttempt;
     const locked = attempt?.phase === "submitted" || attempt?.phase === "completed";

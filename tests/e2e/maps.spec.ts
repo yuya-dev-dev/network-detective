@@ -5,8 +5,13 @@ import c3 from "../../src/data/case03.json" with { type: "json" };
 import c4 from "../../src/data/case04.json" with { type: "json" };
 import c5 from "../../src/data/case05.json" with { type: "json" };
 import c6 from "../../src/data/case06.json" with { type: "json" };
+import c7 from "../../src/data/case07.json" with { type: "json" };
+import c8 from "../../src/data/case08.json" with { type: "json" };
+import c9 from "../../src/data/case09.json" with { type: "json" };
+import c10 from "../../src/data/case10.json" with { type: "json" };
+import c11 from "../../src/data/case11.json" with { type: "json" };
 import { start, noOverflow } from "../helpers/play";
-for (const scenario of [c1,c2,c3,c4,c5,c6]) test(scenario.id+" smartphone network overview, labels, zoom and nodes",async ({page},info)=>{
+for (const scenario of [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11]) test(scenario.id+" smartphone network overview, labels, zoom and nodes",async ({page},info)=>{
   await start(page,scenario.id);
   for (const [width,height] of [[360,640],[390,844],[430,932]]) {
     await page.setViewportSize({width,height});

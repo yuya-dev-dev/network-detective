@@ -178,7 +178,7 @@ test("phone widths stay readable with a bottom internal-monologue panel", async 
     await page.goto("/");
     await noOverflow(page);
     await expect(
-      page.getByRole("button", { name: "捜査を始める", exact: true }),
+      page.getByRole("button", { name: "ベーシックモードを選ぶ", exact: true }),
     ).toBeVisible();
     const image = page.locator(".title-background");
     expect(
@@ -188,7 +188,7 @@ test("phone widths stay readable with a bottom internal-monologue panel", async 
     ).toBe(true);
     await page.screenshot({ path: info.outputPath(`title-${width}.png`) });
     await page
-      .getByRole("button", { name: "捜査を始める", exact: true })
+      .getByRole("button", { name: "ベーシックモードを選ぶ", exact: true })
       .click();
     await expect(page.locator(".inner-voice")).toBeVisible();
     expect(
