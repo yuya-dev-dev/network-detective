@@ -1,0 +1,432 @@
+{
+  "ports": [
+    {
+      "term": "FTP 制御",
+      "ports": "TCP/21",
+      "definition": "ログインや転送指示などの制御接続。",
+      "note": ""
+    },
+    {
+      "term": "FTP データ（アクティブ）",
+      "ports": "TCP/20",
+      "definition": "サーバの送信元20からクライアント指定ポートへ接続。",
+      "note": "パッシブ方式ではサーバが指定した別ポートへクライアントが接続し、20固定ではない。"
+    },
+    {
+      "term": "SSH / SFTP",
+      "ports": "TCP/22",
+      "definition": "暗号化した遠隔操作。SFTPはSSH上のファイル転送で、FTPとは別。",
+      "note": ""
+    },
+    {
+      "term": "Telnet",
+      "ports": "TCP/23",
+      "definition": "遠隔操作。通常は平文で、認証情報も保護されない。",
+      "note": ""
+    },
+    {
+      "term": "SMTP サーバ間配送",
+      "ports": "TCP/25",
+      "definition": "メールサーバからメールサーバへ配送する。",
+      "note": ""
+    },
+    {
+      "term": "メール投稿（Submission）",
+      "ports": "TCP/587",
+      "definition": "利用者からメールサーバへ投稿。STARTTLSでTLSへ切り替える構成がある。",
+      "note": ""
+    },
+    {
+      "term": "メール投稿（Implicit TLS）",
+      "ports": "TCP/465",
+      "definition": "接続直後からTLSで保護するメール投稿。",
+      "note": ""
+    },
+    {
+      "term": "POP3 / POP3S",
+      "ports": "TCP/110・TCP/995",
+      "definition": "メール取得。110は通常POP3、995は接続直後からTLS。",
+      "note": ""
+    },
+    {
+      "term": "IMAP / IMAPS",
+      "ports": "TCP/143・TCP/993",
+      "definition": "サーバ上のメールを操作・同期。143は通常IMAP、993は接続直後からTLS。",
+      "note": ""
+    },
+    {
+      "term": "HTTP",
+      "ports": "TCP/80",
+      "definition": "Webの要求と応答。HTTP自体には通信の暗号化がない。",
+      "note": ""
+    },
+    {
+      "term": "HTTPS",
+      "ports": "TCP/443",
+      "definition": "HTTPをTLSで保護。HTTP/1.1・HTTP/2で通常使う。",
+      "note": "HTTP/3はQUICを使い、通常UDP/443。TLS自体に固有のポートはない。"
+    },
+    {
+      "term": "DNS",
+      "ports": "UDP/53・TCP/53",
+      "definition": "名前解決。通常の問い合わせはUDPが多く、TCPも利用する。",
+      "note": "ゾーン転送はTCP。応答が大きい場合のTCPへの再試行などもあり、TCPをゾーン転送専用と覚えない。"
+    },
+    {
+      "term": "DHCP",
+      "ports": "UDP/67・UDP/68",
+      "definition": "67はサーバ側、68はクライアント側。IP・マスク・GW等を配布する。",
+      "note": ""
+    },
+    {
+      "term": "NTP",
+      "ports": "UDP/123",
+      "definition": "機器の時計を同期する。ログの時刻比較にも関わる。",
+      "note": ""
+    },
+    {
+      "term": "SNMP 問い合わせ",
+      "ports": "UDP/161",
+      "definition": "マネージャからエージェントへの取得・設定要求の宛先。",
+      "note": ""
+    },
+    {
+      "term": "SNMP 通知",
+      "ports": "UDP/162",
+      "definition": "エージェントからマネージャへのTrap等の通知の宛先。",
+      "note": ""
+    },
+    {
+      "term": "LDAP / LDAPS",
+      "ports": "TCP/389・TCP/636",
+      "definition": "ディレクトリへの検索・認証連携。636は接続直後からTLS。",
+      "note": "389でSTARTTLSを利用する構成もある。"
+    },
+    {
+      "term": "SMB",
+      "ports": "TCP/445",
+      "definition": "ファイルやプリンタの共有。インターネットへ無制限に公開しない。",
+      "note": ""
+    },
+    {
+      "term": "Syslog",
+      "ports": "UDP/514",
+      "definition": "機器等からログを転送する代表的な方式。",
+      "note": "TLSで保護するSyslogはTCP/6514。"
+    },
+    {
+      "term": "RADIUS",
+      "ports": "UDP/1812・UDP/1813",
+      "definition": "1812は認証、1813は利用記録（アカウンティング）。",
+      "note": ""
+    },
+    {
+      "term": "IKE / IPsec NAT-T",
+      "ports": "UDP/500・UDP/4500",
+      "definition": "500はIKEの鍵交換、4500はNAT越え時のIKEやESPのUDPカプセル化。",
+      "note": ""
+    },
+    {
+      "term": "TFTP",
+      "ports": "UDP/69",
+      "definition": "簡易なファイル転送の初期要求先。",
+      "note": "転送は選ばれた別UDPポートで続く。通常、認証・暗号化はない。"
+    },
+    {
+      "term": "Kerberos",
+      "ports": "UDP/88・TCP/88",
+      "definition": "チケットを用いる認証。",
+      "note": ""
+    },
+    {
+      "term": "BGP",
+      "ports": "TCP/179",
+      "definition": "ルータ間で経路情報を交換する。",
+      "note": ""
+    },
+    {
+      "term": "ICMP（ping等）",
+      "ports": "TCP/UDPのポートなし",
+      "definition": "IP上で疎通やエラー通知を扱う。TCP/UDPのサービスとは別。",
+      "note": ""
+    },
+    {
+      "term": "IPsec ESP / AH",
+      "ports": "TCP/UDPのポートなし",
+      "definition": "IPプロトコル番号はESP=50、AH=51。",
+      "note": "番号50/51はポート番号ではない。NAT-TではESPをUDP/4500に包む。"
+    }
+  ],
+  "security": [
+    {
+      "term": "多層防御",
+      "definition": "複数の異なる対策を重ね、一つが破られても他の対策で被害を抑える。",
+      "note": "FWだけに頼らず、認証・端末保護・監視等を組み合わせる。",
+      "aliases": "Defense in Depth"
+    },
+    {
+      "term": "最小権限の原則",
+      "definition": "業務に必要な最小限の権限だけを、必要な期間だけ与える。",
+      "note": "",
+      "aliases": "least privilege"
+    },
+    {
+      "term": "職務分離",
+      "definition": "申請・承認・実施などを分け、一人だけで不正を完結できないようにする。",
+      "note": "",
+      "aliases": "separation of duties"
+    },
+    {
+      "term": "デフォルト拒否",
+      "definition": "明示的に許可したもの以外は拒否する。許可漏れを開放として扱わない。",
+      "note": "",
+      "aliases": "default deny"
+    },
+    {
+      "term": "フェールセキュア",
+      "definition": "障害時にも、不正なアクセスを許可しない状態にする。",
+      "note": "可用性を優先して開放する動作と区別する。",
+      "aliases": "fail secure fail closed"
+    },
+    {
+      "term": "ゼロトラスト",
+      "definition": "内部ネットワークにいるだけで信用せず、利用者・端末・状況を基にアクセスを検証する。",
+      "note": "",
+      "aliases": "zero trust"
+    },
+    {
+      "term": "機密性",
+      "definition": "許可された者だけが情報にアクセスできる性質。",
+      "note": "",
+      "aliases": "confidentiality CIA"
+    },
+    {
+      "term": "完全性",
+      "definition": "情報が不正に改ざん・破壊されていない性質。",
+      "note": "",
+      "aliases": "integrity CIA"
+    },
+    {
+      "term": "可用性",
+      "definition": "必要なときに、許可された利用者が情報やサービスを使える性質。",
+      "note": "",
+      "aliases": "availability CIA"
+    },
+    {
+      "term": "認証",
+      "definition": "利用者や機器が主張した身元を確認する。",
+      "note": "",
+      "aliases": "authentication"
+    },
+    {
+      "term": "認可",
+      "definition": "認証等の結果とポリシーに基づき、操作や資源の利用を許可する。",
+      "note": "ログイン成功と、全操作の許可は別。",
+      "aliases": "authorization"
+    },
+    {
+      "term": "多要素認証（MFA）",
+      "definition": "知識・所持・生体など、異なる種類の要素を組み合わせた認証。",
+      "note": "パスワードと秘密の質問は両方知識で、多要素とはいえない。",
+      "aliases": "二要素認証"
+    },
+    {
+      "term": "RBAC",
+      "definition": "役割（ロール）に権限を割り当て、利用者を役割に所属させて管理する。",
+      "note": "",
+      "aliases": "ロールベースアクセス制御"
+    },
+    {
+      "term": "脆弱性",
+      "definition": "攻撃に悪用され得る、システムや運用の弱点。",
+      "note": "",
+      "aliases": "vulnerability"
+    },
+    {
+      "term": "脅威",
+      "definition": "情報やシステムに損害を与え得る原因や事象。",
+      "note": "",
+      "aliases": "threat"
+    },
+    {
+      "term": "リスク",
+      "definition": "脅威が脆弱性等を通じて損害を生む可能性と、その影響。",
+      "note": "",
+      "aliases": "risk"
+    },
+    {
+      "term": "デジタルフォレンジック",
+      "definition": "デジタル証拠を保全・収集・分析し、何が起きたかを調べる技術や手順。",
+      "note": "復旧だけでなく、証拠の完全性と調査過程の記録も重要。",
+      "aliases": "ディジタルフォレンジックス digital forensics"
+    },
+    {
+      "term": "証拠保全",
+      "definition": "ログや媒体等を、調査に使える状態で保持し、改変・消失を防ぐ。",
+      "note": "揮発性、取得時刻、原本、ハッシュ値などを考慮する。",
+      "aliases": "preservation"
+    },
+    {
+      "term": "チェーン・オブ・カストディ",
+      "definition": "証拠を誰が、いつ、取得・保管・受渡ししたかを追跡する記録。",
+      "note": "",
+      "aliases": "証拠管理 chain of custody"
+    },
+    {
+      "term": "インシデント対応",
+      "definition": "検知・分析、封じ込め、原因除去、復旧、再発防止へ進める対応。",
+      "note": "証拠保全と業務影響を考慮して行う。",
+      "aliases": "incident response"
+    },
+    {
+      "term": "CSIRT",
+      "definition": "組織のセキュリティインシデントに対応するチーム。",
+      "note": "",
+      "aliases": "シーサート"
+    },
+    {
+      "term": "SOC",
+      "definition": "ログやアラート等を監視・分析するセキュリティ運用の拠点や組織。",
+      "note": "",
+      "aliases": "Security Operations Center"
+    },
+    {
+      "term": "SIEM",
+      "definition": "複数機器のログを集約・相関分析し、不審な事象の検出や調査を支援する。",
+      "note": "",
+      "aliases": "シーム"
+    },
+    {
+      "term": "EDR",
+      "definition": "端末の動作を監視し、攻撃の検知・調査・隔離等を支援する。",
+      "note": "",
+      "aliases": "Endpoint Detection and Response"
+    },
+    {
+      "term": "IDS / IPS",
+      "definition": "IDSは侵入を検知して通知し、IPSは検知に加えて通信の遮断等を行う。",
+      "note": "",
+      "aliases": "侵入検知 侵入防止"
+    },
+    {
+      "term": "WAF",
+      "definition": "HTTP等のWebアプリへの要求を検査し、攻撃の検知・遮断を行う。",
+      "note": "アプリの脆弱性修正そのものを代替するものではない。",
+      "aliases": "Web Application Firewall"
+    },
+    {
+      "term": "DLP",
+      "definition": "機密情報の持出しや外部送信を監視・制御し、漏えいを防ぐ。",
+      "note": "",
+      "aliases": "Data Loss Prevention"
+    },
+    {
+      "term": "SQLインジェクション",
+      "definition": "入力等をSQLの構造として解釈させ、不正な問い合わせを実行する攻撃。",
+      "note": "対策の基本は、プレースホルダを用いてSQLと値を分離する。",
+      "aliases": "SQL injection"
+    },
+    {
+      "term": "クロスサイトスクリプティング（XSS）",
+      "definition": "悪意あるスクリプト等をWebに混入させ、利用者のブラウザで実行させる攻撃。",
+      "note": "出力先に応じたエスケープ等で防ぐ。",
+      "aliases": "XSS"
+    },
+    {
+      "term": "クロスサイトリクエストフォージェリ（CSRF）",
+      "definition": "ログイン中の利用者のブラウザに、本人が意図しない要求を送らせる攻撃。",
+      "note": "CSRFトークン等で本人の意図を確認する。XSSとは別。",
+      "aliases": "CSRF"
+    },
+    {
+      "term": "SSRF",
+      "definition": "サーバに攻撃者が指定する宛先へ要求させ、内部資源等へのアクセスに悪用する攻撃。",
+      "note": "",
+      "aliases": "Server-Side Request Forgery"
+    },
+    {
+      "term": "フィッシング",
+      "definition": "偽サイトやメール等で利用者をだまし、認証情報などを盗む手口。",
+      "note": "",
+      "aliases": "phishing"
+    },
+    {
+      "term": "ランサムウェア",
+      "definition": "データの暗号化等で利用を妨げ、金銭を要求するマルウェア。",
+      "note": "情報窃取と公開の脅迫を伴う場合もある。",
+      "aliases": "ransomware"
+    },
+    {
+      "term": "サプライチェーン攻撃",
+      "definition": "取引先・開発元・更新経路等を足掛かりに、利用する組織へ被害を広げる攻撃。",
+      "note": "",
+      "aliases": "supply chain"
+    },
+    {
+      "term": "セッションハイジャック",
+      "definition": "セッションID等を奪って、認証済み利用者になりすます攻撃。",
+      "note": "",
+      "aliases": "session hijacking"
+    },
+    {
+      "term": "ハッシュ関数",
+      "definition": "データから固定長の値を計算する。改変検知や署名等に使う。",
+      "note": "暗号化とは別で、ハッシュ値から元に戻すための仕組みではない。",
+      "aliases": "hash digest"
+    },
+    {
+      "term": "ソルト",
+      "definition": "パスワードのハッシュ化等で入力に加える、利用者等ごとに異なる値。",
+      "note": "同じパスワードの同じハッシュ化や事前計算の使い回しを防ぐ。秘密鍵ではない。",
+      "aliases": "salt"
+    },
+    {
+      "term": "ディジタル署名",
+      "definition": "秘密鍵で署名し、対応する公開鍵で作成者や改変の有無を検証する。",
+      "note": "署名だけで内容の機密性は保護しない。",
+      "aliases": "デジタル署名 digital signature"
+    },
+    {
+      "term": "PKI / 認証局（CA）",
+      "definition": "公開鍵と主体の対応を、CAが発行する証明書等で確認する基盤。",
+      "note": "",
+      "aliases": "Public Key Infrastructure"
+    },
+    {
+      "term": "CRL / OCSP",
+      "definition": "証明書の失効状態を調べる仕組み。CRLは失効一覧、OCSPはオンライン照会。",
+      "note": "",
+      "aliases": "certificate revocation"
+    },
+    {
+      "term": "TLS",
+      "definition": "通信相手の認証、通信の暗号化、改ざん検知等を行うプロトコル。",
+      "note": "区間を保護するもので、保管データや端点の侵害まで防ぐとは限らない。",
+      "aliases": "Transport Layer Security"
+    },
+    {
+      "term": "HMAC",
+      "definition": "共通の秘密鍵とハッシュ関数を用いて、改変やメッセージの真正性を検証する。",
+      "note": "公開鍵のディジタル署名とは別。",
+      "aliases": "メッセージ認証コード MAC"
+    },
+    {
+      "term": "リプレイ攻撃",
+      "definition": "取得した有効な認証情報や通信を再送し、不正な操作等を成立させる攻撃。",
+      "note": "nonceや時刻、シーケンス番号等を使って再利用を検出する。",
+      "aliases": "replay"
+    },
+    {
+      "term": "パスワードリスト攻撃",
+      "definition": "他所で漏えいしたIDとパスワードの組を使い、別サービスへのログインを試す攻撃。",
+      "note": "",
+      "aliases": "credential stuffing"
+    },
+    {
+      "term": "パスワードスプレー攻撃",
+      "definition": "少数のよく使われるパスワードを、多数のアカウントに試す攻撃。",
+      "note": "一つのアカウントへの総当たりとは軸が違う。",
+      "aliases": "password spraying"
+    }
+  ]
+}
