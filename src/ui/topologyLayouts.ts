@@ -1,16 +1,18 @@
 import type { PlayableScenario } from "../scenario/types";
 import { securityLayouts } from "./securityLayouts";
+import { networkLayouts } from "./networkLayouts";
 export type Point = [number, number];
 export type MapNode = { at: Point; title?: string; lines?: string[] };
-export type MapEdge = { points?: Point[]; kind?: "network" | "tunnel" | "relation" | "audit" | "test" | "copy" | "certificate"; arrows?: "both" | "end" | "none"; labels?: { at: Point; text: string }[] };
+export type MapEdge = { points?: Point[]; kind?: "network" | "tunnel" | "relation" | "audit" | "test" | "copy" | "certificate" | "bulk"; arrows?: "both" | "end" | "none"; labels?: { at: Point; text: string }[] };
 export type MapZone = { x: number; y: number; width: number; height: number; label: string };
-export type MapLayout = { width: number; height: number; nodes: Record<string, MapNode>; edges: Record<string, MapEdge>; zones: MapZone[]; notes?: { at: Point; text: string }[]; legend?: string[] };
+export type MapLayout = { width: number; height: number; nodes: Record<string, MapNode>; edges: Record<string, MapEdge>; zones: MapZone[]; notes?: { at: Point; text: string }[]; legend?: string[]; compactOverview?: boolean; overlays?: (MapEdge & { points: Point[] })[] };
 const node = (x: number, y: number, title?: string, lines?: string[]): MapNode => ({ at: [x,y], title, lines });
 const label = (x: number, y: number, text: string) => ({ at: [x,y] as Point, text });
 const edge = (points: Point[], text?: string, at?: Point, kind: MapEdge["kind"] = "network"): MapEdge => ({ points, kind, labels: text && at ? [{ at, text }] : [] });
 const zone = (x: number, y: number, width: number, height: number, text: string): MapZone => ({ x,y,width,height,label:text });
 export const layouts: Record<string, MapLayout> = {
   ...securityLayouts,
+  ...networkLayouts,
   case01: { width: 480, height: 400,
     zones: [zone(12,25,188,105,"営業 VLAN41 / 10.28.41.0/24"),zone(280,25,188,105,"運用 VLAN42 / 10.28.42.0/24"),zone(12,264,188,112,"DNS側"),zone(280,264,188,112,"サーバ側")],
     nodes: { N_SALES: node(106,81,"営業端末",["PC 10.28.41.23","GW 10.28.41.1"]),N_OPS:node(374,81,"運用端末",["PC 10.28.42.24","GW 10.28.42.1"]),N_L3:node(106,204),N_DNS:node(106,321),N_FW:node(374,204,"サーバ用FW",["クライアント側 ⇄ サーバ側"]),N_WEB:node(374,321) },

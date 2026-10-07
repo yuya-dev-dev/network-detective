@@ -347,9 +347,9 @@ MVPは単一原因。主張カードは正しいもの3枚ともっともらし�
 
 ## 14. 現行のモード構成（MVP完了後の追加）
 
-2026-10-06の追加では、タイトルからベーシック・ネットワーク・セキュリティを選ぶ。既存CASE 01〜06はベーシック、セキュリティの完成稿5本はCASE 07〜11として収録する。ネットワークは選択入口のみで、専用事件は今後追加する。メニューのモード分類と各シナリオのnetwork / hybrid / securityという技術分類は別に管理する。
+2026-10-06の追加では、タイトルからベーシック・ネットワーク・セキュリティを選ぶ。既存CASE 01〜06はベーシック、セキュリティの完成稿5本はCASE 07〜11として収録する。2026-10-08の追加でネットワークの完成稿5本をCASE 12〜16として収録する。メニューのモード分類と各シナリオのnetwork / hybrid / securityという技術分類は別に管理する。
 
-第1事件のMVP仕様と既存事件の採点・証拠・保存形式は変更しない。新5事件の内容の正本は `docs/security-mode-planning/scenarios/sec01.md` 〜 `sec05.md`、実装時のID対応と検証は `docs/SECURITY_IMPLEMENTATION.md` に記録する。これらの原稿・データ・採点テストには解答を含む。
+第1事件のMVP仕様と既存事件の採点・証拠・保存形式は変更しない。新5事件の内容の正本は `docs/security-mode-planning/scenarios/sec01.md` 〜 `sec05.md`、実装時のID対応と検証は `docs/SECURITY_IMPLEMENTATION.md` に記録する。ネットワーク5事件の内容の正本は `docs/network-mode-planning/scenarios/net01.md` 〜 `net05.md`、ID対応と検証は `docs/NETWORK_IMPLEMENTATION.md` に記録する。これらの原稿・データ・採点テストには解答を含む。
 
 ## 参考資料
 

@@ -1623,6 +1623,17 @@ summary {
 .mode-description { color: var(--secondary); margin: 0 0 20px; }
 .mode-empty { padding: 24px 20px; }
 .map-security { min-height: 180px; }
+.map-network .map-node-title { font-size: 16px; }
+.map-network.map-overview .map-address,
+.map-network.map-overview .map-link-label,
+.map-network.map-overview .map-note { display: none; }
+.map-network.map-overview .map-overlay { display: none; }
+.map-network.map-overview .map-node-title { font-size: 20px; transform: translateY(12px); }
+.map-network.map-overview .map-zone text { font-size: 13px; }
+.map-network.map-overview .map-link { stroke-width: 2.5; }
+.map-network.map-overview .map-link.test { stroke-dasharray: 4 3; }
+.map-network .map-link.test,
+.map-network .map-link.bulk { stroke-dasharray: 2 4; }
 .map-link.audit { stroke-dasharray: 2 4; }
 .map-link.copy { stroke-dasharray: 8 3 2 3; }
 .map-link.test { stroke-width: 1; }
@@ -1649,3 +1660,5 @@ summary {
 .glossary dd { margin-left: 0; overflow-wrap: anywhere; }
 .glossary .glossary-port { font-family: ui-monospace, Consolas, monospace; color: var(--accent); font-weight: 700; margin-bottom: 5px; }
 .glossary .glossary-note { margin-top: 6px; color: var(--muted); }
+
+.map-network .map-note { paint-order: stroke; stroke: var(--map-bg); stroke-width: 3px; stroke-linejoin: round; }

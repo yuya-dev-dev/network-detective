@@ -10,8 +10,30 @@ import c8 from "../../src/data/case08.json" with { type: "json" };
 import c9 from "../../src/data/case09.json" with { type: "json" };
 import c10 from "../../src/data/case10.json" with { type: "json" };
 import c11 from "../../src/data/case11.json" with { type: "json" };
+import c12 from "../../src/data/case12.json" with { type: "json" };
+import c13 from "../../src/data/case13.json" with { type: "json" };
+import c14 from "../../src/data/case14.json" with { type: "json" };
+import c15 from "../../src/data/case15.json" with { type: "json" };
+import c16 from "../../src/data/case16.json" with { type: "json" };
 import { start, noOverflow } from "../helpers/play";
-for (const scenario of [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11])
+for (const scenario of [
+  c1,
+  c2,
+  c3,
+  c4,
+  c5,
+  c6,
+  c7,
+  c8,
+  c9,
+  c10,
+  c11,
+  c12,
+  c13,
+  c14,
+  c15,
+  c16,
+])
   test(
     scenario.id + " smartphone network overview, labels, zoom and nodes",
     async ({ page }, info) => {
@@ -89,6 +111,25 @@ for (const scenario of [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11])
         .getByRole("button", { name: "構成図を拡大", exact: true })
         .click();
       await expect(dialog.getByText("175%", { exact: true })).toBeVisible();
+      expect(
+        await dialog.locator(".map-expanded svg text").evaluateAll((nodes) =>
+          nodes.every((n) => {
+            const b = (n as SVGGraphicsElement).getBBox();
+            const v = (n as SVGGraphicsElement).ownerSVGElement!.viewBox
+              .baseVal;
+            return (
+              b.x >= 0 &&
+              b.y >= 0 &&
+              b.x + b.width <= v.width &&
+              b.y + b.height <= v.height
+            );
+          }),
+        ),
+      ).toBe(true);
+      if (scenario.id >= "case12")
+        await dialog
+          .locator(".map-expanded")
+          .screenshot({ path: info.outputPath("expanded-white.png") });
       const region = dialog.getByRole("region", { name: "拡大構成図" });
       expect(await region.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(
         true,

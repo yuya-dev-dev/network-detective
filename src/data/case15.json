@@ -1,0 +1,956 @@
+{
+  "schemaVersion": 1,
+  "id": "case15",
+  "revision": 1,
+  "title": "片道の検品票",
+  "type": "network",
+  "difficulty": 4,
+  "estimatedMinutes": 40,
+  "prerequisites": [
+    "IP・経路・ネットワーク機器の概要（用語辞典で確認できます）"
+  ],
+  "brief": "食品加工会社の配送センターから、検品票を確定できない端末の調査依頼が届いた。同じサービスを使っているのに、進める席と待ち続ける席がある。出荷担当の三枝は積み込みを止めたくないが、未確定の票を何度も送って重複させることも避けたい。運用担当の向井は、冗長経路を残し、返答の検査を外さずに復旧したい。拠点と業務サーバの通信は現用FW-A経由で往復し、FW-Bは保守切替に備えて残す承認済みの運用だ。設定変更前の経路、通信、状態記録から、止まる端末の範囲と接続の流れを確かめてほしい。記録を保全し、必要な防護と切替の備えを維持する修復・確認計画を報告する。画面の見え方だけで、全端末の障害やサーバ停止とは決めないでほしい。",
+  "context": {
+    "baseline": [
+      "拠点10.44.16.0/24は業務サーバ10.90.0.20:443へFW-A経由で往復する承認済み運用。FW-Bは切替用に物理接続されているが今回拠点の現用経路ではない。通信量や送信元末尾で経路を振り分けない。IPv4のみ、NAT/ECMP/PBR/VRFなし、経路は表示する有効表の最長一致、同じ長さの競合なし。"
+    ],
+    "assumptions": [
+      "FW-A/Bは独立ステートフル装置で状態共有なし。外側（拠点側）から内側（DC側）のTCP443 SYN開始を許可、返答は同一FWに往路SYNを見た状態がある場合だけ許可。DCから来たSYN-ACKを新規開始とは認めない。一般に非対称経路が必ず障害になるとはせず、この装置仕様とログで判断する。FWを無状態化しない。記録は対象試行の5-tuple/初期SYNを全範囲採取し、過去セッションと混ぜない。",
+      "拠点の端末→BR LAN10.44.16.1/24。BR.a172.22.0.2↔FW-A.branch172.22.0.1はL1/172.22.0.0/30、BR.b172.22.0.6↔FW-B.branch172.22.0.5はL2/172.22.0.4/30。FW-A.dc172.22.1.1↔DR.a172.22.1.2はL3/172.22.1.0/30、FW-B.dc172.22.1.5↔DR.b172.22.1.6はL4/172.22.1.4/30。DR.srv10.90.0.1と検品サーバ10.90.0.20は10.90.0.0/24、DNSは拠点LANの10.44.16.53。物理両枝は実線、承認されたA往復は点線矢印。端末→server TCP443の要求と逆向きの返答、DNS照会は別の通信。P1=BR、P2=DR、P3=FW-B.dc。FW-A/Bは独立状態表で共有なし。",
+      "全資料は2026-10-07T10:30:00+09:00に取得・整理済みで、調査開始時から任意順に閲覧できる。機器は同期済み。本文の未指定日付は2026-10-07、時刻はJST。observedAtは状態又は収録終端以後の観測時刻で、取得とは分ける。前日資料は2026-10-06を明記。diagnosticも設定変更前の固定記録で、欠落なしは各資料の明記範囲だけに限る。"
+    ],
+    "snapshotTime": "2026-10-07T10:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "pc70",
+        "label": "検品PC-A",
+        "kind": "client",
+        "addresses": [
+          "10.44.16.70/24 GW10.44.16.1、branchLAN"
+        ]
+      },
+      {
+        "id": "pc140",
+        "label": "検品PC-B",
+        "kind": "client",
+        "addresses": [
+          "10.44.16.140/24 GW10.44.16.1、branchLAN"
+        ]
+      },
+      {
+        "id": "br",
+        "label": "拠点ルータBR",
+        "kind": "router",
+        "addresses": [
+          "LAN10.44.16.1/24、a172.22.0.2/30、b172.22.0.6/30"
+        ]
+      },
+      {
+        "id": "fwa",
+        "label": "FW-A",
+        "kind": "firewall",
+        "addresses": [
+          "branch172.22.0.1/30、dc172.22.1.1/30"
+        ]
+      },
+      {
+        "id": "fwb",
+        "label": "FW-B",
+        "kind": "firewall",
+        "addresses": [
+          "branch172.22.0.5/30、dc172.22.1.5/30"
+        ]
+      },
+      {
+        "id": "dr",
+        "label": "DCルータDR",
+        "kind": "router",
+        "addresses": [
+          "a172.22.1.2/30、b172.22.1.6/30、srv10.90.0.1/24"
+        ]
+      },
+      {
+        "id": "server",
+        "label": "検品サーバ",
+        "kind": "service",
+        "addresses": [
+          "10.90.0.20/24 GW10.90.0.1 TCP443"
+        ]
+      },
+      {
+        "id": "dns",
+        "label": "拠点DNS",
+        "kind": "service",
+        "addresses": [
+          "10.44.16.53/24"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_A",
+        "from": "pc70",
+        "to": "br",
+        "label": "PC-A→BR LAN、TCP443要求"
+      },
+      {
+        "id": "L_B",
+        "from": "pc140",
+        "to": "br",
+        "label": "PC-B→BR LAN、TCP443要求"
+      },
+      {
+        "id": "L_DNS",
+        "from": "br",
+        "to": "dns",
+        "label": "拠点LANのDNS、UDP/TCP53"
+      },
+      {
+        "id": "L_BR_A",
+        "from": "br",
+        "to": "fwa",
+        "label": "BR.a↔FW-A.branch、L1 172.22.0.0/30"
+      },
+      {
+        "id": "L_BR_B",
+        "from": "br",
+        "to": "fwb",
+        "label": "BR.b↔FW-B.branch、L2 172.22.0.4/30"
+      },
+      {
+        "id": "L_A_DR",
+        "from": "fwa",
+        "to": "dr",
+        "label": "FW-A.dc↔DR.a、L3 172.22.1.0/30"
+      },
+      {
+        "id": "L_B_DR",
+        "from": "fwb",
+        "to": "dr",
+        "label": "FW-B.dc↔DR.b、L4 172.22.1.4/30"
+      },
+      {
+        "id": "L_SERVER",
+        "from": "dr",
+        "to": "server",
+        "label": "DR.srv→検品サーバ、10.90.0.0/24・TCP443"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "通信/切替要件",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "拠点経路とFW運用承認",
+      "nodeIds": [
+        "br",
+        "fwa",
+        "fwb",
+        "dr",
+        "server"
+      ],
+      "observedAt": "2026-10-06T18:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-06 18:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "2026-10-06 18:00版。10.44.16.0/24↔10.90.0.0/24は往復A。FW-Bは保守切替用、切替時は往復の経路変更と新規接続確認をセットにする。状態共有なし、FWのSYN開始/返答状態仕様は前述。返答の無状態許可は禁止。拠点の64/26だけBへ出す運用承認なし。ネットワーク設定を変えずサーバを増設する業務要件でもない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "対象端末の比較",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "拠点業務接続比較",
+      "nodeIds": [
+        "pc70",
+        "pc140",
+        "br",
+        "dns",
+        "server"
+      ],
+      "observedAt": "2026-10-07T10:00:15+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:15 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00 PC-A=10.44.16.70/24、PC-B=10.44.16.140/24、GW同じ10.44.16.1。両方check.ship.example A=10.90.0.20、AAAAなし、固定同一HTTPSサービス。PC-A sport51070はSYN再送し10:00:15timeout、PC-B sport51140はTCP/TLS成立→HTTPS200。ARPのGW MACは同じBR、別NIC/個別proxy/端末FWdenyなし。以後この試行の5-tupleを区別する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "BRの往路経路全件",
+      "kind": "config",
+      "acquisition": "diagnostic",
+      "source": "P1 BR有効IPv4表",
+      "nodeIds": [
+        "br",
+        "fwa",
+        "fwb",
+        "server"
+      ],
+      "observedAt": "2026-10-07T10:01:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:01:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:01有効表：10.44.16.0/24 connectedLAN、172.22.0.0/30 connected a、172.22.0.4/30 connected b、10.90.0.0/24 via172.22.0.1/a、default via172.22.0.1/a。表示全件、PBR/ECMP/NATなし。宛先10.90.0.20は端末A/Bともaへ転送する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "DRの戻り経路全件",
+      "kind": "config",
+      "acquisition": "diagnostic",
+      "source": "P2 DR有効IPv4表",
+      "nodeIds": [
+        "dr",
+        "fwa",
+        "fwb",
+        "pc70",
+        "pc140"
+      ],
+      "observedAt": "2026-10-07T10:01:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:01:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:01有効表：10.90.0.0/24 connected srv、172.22.1.0/30 connected a、172.22.1.4/30 connected b、10.44.16.0/24 via172.22.1.1/a metric10、10.44.16.64/26 via172.22.1.5/b metric200、default via172.22.1.1/a。全件、最長一致がmetric比較に先行。64/26は.64–.127を覆う。metricの異なる同一prefixは存在しない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "DR両側のパケット対応",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P2 DRインタフェース全採取",
+      "nodeIds": [
+        "pc70",
+        "pc140",
+        "fwa",
+        "fwb",
+        "dr",
+        "server"
+      ],
+      "observedAt": "2026-10-07T10:00:15+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:15 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00:00–15、全対象TCPの欠落0、各フローはこの時間に新規開始。PC-A10.44.16.70:51070→10.90.0.20:443 SYN seq1000がDR.a（Aから）へ到着、DR.srv→server。返答SYN-ACK seq4000 ack1001はserver→DR.srvへ到着、DR.b→FW-Bへ送出。PC-A ACK受信0、再送SYNも同じ方向。PC-B10.44.16.140:51140のSYNはDR.a、対応SYN-ACKはDR.aへ送出、ACK受信/TLS成立。TCP値は相関用架空値、秘密データなし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "FW-Bの状態/拒否",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P3 FW-B状態と全対象ログ",
+      "nodeIds": [
+        "fwb",
+        "pc70",
+        "server"
+      ],
+      "observedAt": "2026-10-07T10:00:15+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:15 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00:00–15、フロー10.44.16.70:51070↔10.90.0.20:443。FW-Bは初期SYNをbranch側で受信0、状態entryなし。dc側でSYN-ACK seq4000 ack1001受信、drop reason=NO_MATCHING_STATE。再送対応も同じ。全対象ログ、欠落0、表示rule=RETURN_STATE_REQUIRED。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "FW-Aの往路状態",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "FW-A全対象ログ/状態/リンク統計",
+      "nodeIds": [
+        "fwa",
+        "pc70",
+        "pc140",
+        "server"
+      ],
+      "observedAt": "2026-10-07T10:05:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "同じ10:00:00–15。PC-AのSYNをbranchで許可しdcへ送出、state=SYN_SENT、対応SYN-ACK受信0、タイムアウト待ち。PC-BのSYN/返答/ACKを許可、state=ESTABLISHED。全対象/欠落0。FW-Aの両側リンクは09:50–10:05 up/CRC0。このリンク統計の区間とTCP状態の10:00:00–10:00:15は別で、TCP状態を10:05の状態と読み替えない。Aからサーバまで要求は届いている。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "サービス健全性",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "DC内のHTTPS/負荷確認",
+      "nodeIds": [
+        "dr",
+        "server",
+        "dns"
+      ],
+      "observedAt": "2026-10-07T10:05:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:05 serverlisten443、CPU19%、検品DB応答8ms、DC管理診断HTTPS200。DNS台帳10.90.0.20一致、両端末問い合わせはE02。障害を直した後の記録ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "DR設定取り込み記録",
+      "kind": "log",
+      "acquisition": "document",
+      "source": "経路import履歴",
+      "nodeIds": [
+        "dr",
+        "fwb"
+      ],
+      "observedAt": "2026-10-07T09:40:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:40:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:40保守検証用ファイルから10.44.16.64/26 via172.22.1.5 metric200をDRへ追加。/24は変更なし、BR/FW/サーバ変更なし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "配送画面の更新",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "検品票テンプレート履歴",
+      "nodeIds": [
+        "server"
+      ],
+      "observedAt": "2026-10-07T09:20:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:20:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:20配送便の表示順を変更。アプリDBの並び順のみ、IP/route/FW設定は対象外。PC-Bでは新しい順で200表示済み。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H1",
+      "label": "不要な具体経路で返答がBへ",
+      "description": "DRの不要な/26が戻りだけBへ向け、初期SYNを見ない独立FWの状態条件と不一致になった"
+    },
+    {
+      "id": "H2",
+      "label": "BRが往路をBへ送る",
+      "description": "BRの往路が端末群の一部だけBを選び、FW-Aを通らずにサーバへ新規接続を送った"
+    },
+    {
+      "id": "H3",
+      "label": "FW-Aが初期SYNを拒否",
+      "description": "FW-Aが業務443の初期SYNを拒否し、拠点の要求をDRや検品サーバへ転送できなかった"
+    },
+    {
+      "id": "H4",
+      "label": "サーバが返答を生成しない",
+      "description": "検品サーバが接続要求へ応答せず、DRには当該接続に対応するSYN-ACKが到着しなかった"
+    },
+    {
+      "id": "H5",
+      "label": "FW-Bの状態検査が故障",
+      "description": "FW-Bの状態検査が承認仕様から壊れ、初期SYNと状態があっても対応する返答を拒否した"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S1",
+        "label": "一群の新規TCP接続",
+        "description": "拠点の10.44.16.64/26内端末から検品サービスへの新規接続を対象とし、他の拠点アドレスとは分けて扱う"
+      },
+      {
+        "id": "S2",
+        "label": "拠点全端末の新規接続",
+        "description": "拠点10.44.16.0/24の全端末からの新規接続を対象とし、成功席を含む共通の接続停止として扱う"
+      },
+      {
+        "id": "S3",
+        "label": "サーバの全HTTPS業務",
+        "description": "検品サーバの全利用者を対象とし、拠点とDC診断の接続を含むサービス全体の停止として扱う"
+      },
+      {
+        "id": "S4",
+        "label": "拠点のDNS照会",
+        "description": "DNSだけを対象とし、解決後の要求送出やサーバからの返答経路は正常として扱う"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H1",
+        "label": "不要な具体経路で返答がBへ",
+        "description": "DRの不要な/26が戻りだけBへ向け、初期SYNを見ない独立FWの状態条件と不一致になった"
+      },
+      {
+        "id": "H2",
+        "label": "BRが往路をBへ送る",
+        "description": "BRの往路が端末群の一部だけBを選び、FW-Aを通らずにサーバへ新規接続を送った"
+      },
+      {
+        "id": "H3",
+        "label": "FW-Aが初期SYNを拒否",
+        "description": "FW-Aが業務443の初期SYNを拒否し、拠点の要求をDRや検品サーバへ転送できなかった"
+      },
+      {
+        "id": "H4",
+        "label": "サーバが返答を生成しない",
+        "description": "検品サーバが接続要求へ応答せず、DRには当該接続に対応するSYN-ACKが到着しなかった"
+      },
+      {
+        "id": "H5",
+        "label": "FW-Bの状態検査が故障",
+        "description": "FW-Bの状態検査が承認仕様から壊れ、初期SYNと状態があっても対応する返答を拒否した"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "C1",
+        "label": "当該失敗と有効戻り経路",
+        "description": "10:00の新規試行で.70宛ての返答不成立が観測され、DRの有効/26経路が戻りをBへ向ける",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W1",
+        "label": "返答はAでmetric優先",
+        "description": "10:00の失敗試行の返答はA側へ出ており、DRでは/24の小さいmetricが/26より優先された",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C2",
+        "label": "要求と返答の異なる枝",
+        "description": "同じPC-A接続の要求はA側からDRへ到着し、対応するSYN-ACKはB側へ出る",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "W2",
+        "label": "要求と返答は同じA枝",
+        "description": "PC-Aの要求と返答は同じA枝を通り、DRの反対側の枝には該当TCPがない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C3",
+        "label": "FW-Bの状態と返答拒否",
+        "description": "FW-Bはこの接続の初期SYNを見ず、独立した状態検査の条件どおり返答を拒否した",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "W3",
+        "label": "FW-Bが対応状態を持つ",
+        "description": "FW-Bは初期SYNを受信して状態を持ち、対応するSYN-ACKを許可した",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R4",
+        "label": "FW-Bの返答状態検査を解除",
+        "description": "経路・通信・状態ログを保全し、FW-Bの返答状態検査を無効にしてSYN-ACKを通し、現在の経路とBの接続を維持する"
+      },
+      {
+        "id": "R1",
+        "label": "不要な具体経路を除去",
+        "description": "経路・通信・状態ログを保全し、DRの不要10.44.16.64/26を撤去して/24往復Aへ戻し、状態検査とBを維持する"
+      },
+      {
+        "id": "R2",
+        "label": "24経路のmetricを下げる",
+        "description": "経路・通信・状態ログを保全し、DRの/24 metricを下げて優先を調整し、/26経路と両FWの状態検査を維持する"
+      },
+      {
+        "id": "R3",
+        "label": "検品アプリを再起動",
+        "description": "経路・通信・状態ログを保全し、検品アプリを再起動して接続を受け直し、DRの有効経路と両FWの検査を維持する"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P1",
+        "label": "具体prefixと複数端末を照合",
+        "description": "経路差分と具体的prefixを照合し、複数拠点アドレスで往復と新規TCPを受入して、切替用Bを維持する"
+      },
+      {
+        "id": "P2",
+        "label": "24経路の存在だけを照合",
+        "description": "DRの/24経路の存在を照合し、その登録を全拠点の到達性判定として、現在の具体的経路とBを維持する"
+      },
+      {
+        "id": "P3",
+        "label": "FW-A許可ログだけを照合",
+        "description": "FW-AのSYN許可ログを照合し、その記録を往復の到達性判定として、現在のDR経路と両FWを維持する"
+      },
+      {
+        "id": "P4",
+        "label": "冗長FW-Bを恒久撤去",
+        "description": "切替用FW-Bを恒久撤去して単一路にし、残したFW-Aの許可を受入として、拠点とサーバの現用接続を維持する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V2",
+        "label": "サーバpingだけで判定",
+        "description": "拠点からserverへのpingを確認し、その応答を新規TCPの復旧判定にして、状態表と検品表示の追加試験は省略する"
+      },
+      {
+        "id": "V3",
+        "label": "FW-AのSYN許可で判定",
+        "description": "FW-Aの当該SYN許可を確認し、その往路ログを復旧判定にして、返答と新規TLS・検品表示の追加試験は省略する"
+      },
+      {
+        "id": "V4",
+        "label": "既存DC診断で復旧判定",
+        "description": "保存済みDC診断のHTTPS200を確認し、その対照を拠点の復旧判定にして、修復後の対象端末試験は省略する"
+      },
+      {
+        "id": "V1",
+        "label": "両端末の往復と業務を確認",
+        "description": ".70と.140の新規TCP・TLS・検品表示、往復Aと状態表を確認し、切替用Bの接続が残ることも確かめる"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "要求が届くことと返答が帰ることを分ける。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "端末の違いを戻り宛先と経路prefixで比較し、metricより先に適用される規則を読む。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": ".70は64/26内、.140は外。往路を見たFWとSYN-ACKを受けるFWの状態表を対応付ける。",
+      "evidenceIds": []
+    }
+  ],
+  "glossary": [
+    {
+      "term": "最長一致",
+      "definition": "宛先に合う経路の中から最も長いprefixを選ぶ規則"
+    },
+    {
+      "term": "/26",
+      "definition": "ネットワーク部26ビット、64アドレスの範囲"
+    },
+    {
+      "term": "metric",
+      "definition": "同条件の経路を比較する指標"
+    },
+    {
+      "term": "非対称経路",
+      "definition": "往路と復路が別の枝を通ること"
+    },
+    {
+      "term": "SYN / SYN-ACK / ACK",
+      "definition": "TCP接続を始める3段階のパケット"
+    },
+    {
+      "term": "stateful",
+      "definition": "接続状態に従って通信を検査すること"
+    },
+    {
+      "term": "5-tuple",
+      "definition": "送信元・宛先IP、送信元・宛先ポート、プロトコル"
+    },
+    {
+      "term": "ECMP",
+      "definition": "同コストの複数経路を使う方式。本件では使わない"
+    },
+    {
+      "term": "NAT",
+      "definition": "IPアドレス等を変換する方式。本件では使わない"
+    },
+    {
+      "term": "PBR",
+      "definition": "通常の宛先経路表とは別の条件による経路制御。本件では使わない"
+    },
+    {
+      "term": "VRF",
+      "definition": "経路表を論理的に分ける仕組み。本件では使わない"
+    }
+  ],
+  "solution": {
+    "scopeId": "S1",
+    "causeId": "H1",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02",
+            "E04"
+          ],
+          [
+            "E04",
+            "E05"
+          ],
+          [
+            "E04",
+            "E06"
+          ],
+          [
+            "E04",
+            "E07"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E01",
+          "E07"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "R1",
+    "preventionId": "P1",
+    "verificationId": "V1",
+    "criticalOptionIds": [
+      "R4"
+    ],
+    "causalChain": [
+      {
+        "text": "正常な往復：現用は拠点/24とサーバ網をFW-A経由で往復し、Bは切替用に残します。両FWは状態非共有で、返答には同じFWの初期SYN状態が必要です（E01）。非対称経路の一般論だけで障害と決めません。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "端末と往路：PC-A .70はtimeout、PC-B .140は同じDNS/HTTPSで成功します（E02）。BRの有効表は両方のサーバ宛先をAへ送り（E03）、FW-AもSYNを許可してサーバへ届けています（E07/E05）。",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E07",
+          "E05"
+        ]
+      },
+      {
+        "text": "戻り経路の選択：DRには/24 via Aと、.64–.127の/26 via Bが有効です。prefix長の比較がmetricに先行するため、.70への返答はBを選び、.140は/26外なのでAを選びます（E02/E04）。高いmetric200でも/26が先です。",
+        "evidenceIds": [
+          "E02",
+          "E04"
+        ]
+      },
+      {
+        "text": "同じ接続の拒否：DR採取でPC-AのSYNはAから到着し、対応SYN-ACKはBへ出ます（E05）。Bは初期SYNを見ず状態なしで返答を拒否します（E06）。Aの状態がBに共有される仕様ではありません。Bの検査故障ではなく、不要な戻り経路との不一致です。",
+        "evidenceIds": [
+          "E05",
+          "E06"
+        ]
+      },
+      {
+        "text": "修復計画：経路/通信/状態を保全し、DRの不要な10.44.16.64/26を撤去して承認/24の往復Aへ戻します（E01/E04/E09）。/24のmetricだけを下げても最長一致は変わりません。返答検査を無効化したり、切替用Bを恒久撤去したりしません。",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E09"
+        ]
+      },
+      {
+        "text": "確認と再発防止：実施後は.70と.140で新規TCP/TLSと検品表示、往復Aと状態表、切替用Bの残存を確認する計画です。現在のDC診断200で復旧としません（E08）。経路差分とより具体的prefixを照合し、複数アドレスで往復受入を行います。未確定票を調査のため繰り返し確定しない業務注意も守ります。",
+        "evidenceIds": [
+          "E08"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H1": {
+        "text": "E04/E05/E06",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E03全件/E05往路A",
+        "evidenceIds": [
+          "E03",
+          "E05"
+        ]
+      },
+      "H3": {
+        "text": "E07許可/E05server到着",
+        "evidenceIds": [
+          "E07",
+          "E05"
+        ]
+      },
+      "H4": {
+        "text": "E05SYN-ACK到着/E08正常",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "H5": {
+        "text": "E01/E06正常仕様の拒否、解除してよい話ではない。",
+        "evidenceIds": [
+          "E01",
+          "E06"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S1": {
+        "text": "E02/E04/E05",
+        "evidenceIds": [
+          "E02",
+          "E04",
+          "E05"
+        ]
+      },
+      "S2": {
+        "text": ".140正常（E02）",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "S3": {
+        "text": "E08正常",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "S4": {
+        "text": "E02名前解決成功、返答経路に差",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "H1": {
+        "text": "E04/E05/E06",
+        "evidenceIds": [
+          "E04",
+          "E05",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E03全件/E05往路A",
+        "evidenceIds": [
+          "E03",
+          "E05"
+        ]
+      },
+      "H3": {
+        "text": "E07許可/E05server到着",
+        "evidenceIds": [
+          "E07",
+          "E05"
+        ]
+      },
+      "H4": {
+        "text": "E05SYN-ACK到着/E08正常",
+        "evidenceIds": [
+          "E05",
+          "E08"
+        ]
+      },
+      "H5": {
+        "text": "E01/E06正常仕様の拒否、解除してよい話ではない。",
+        "evidenceIds": [
+          "E01",
+          "E06"
+        ]
+      },
+      "R1": {
+        "text": "E01/E04/E09",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E09"
+        ]
+      },
+      "R2": {
+        "text": "prefix長優先は変わらない（E04）",
+        "evidenceIds": [
+          "E04"
+        ]
+      },
+      "R3": {
+        "text": "E05応答、経路は残る",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "R4": {
+        "text": "E01防護条件を破る",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "P1": {
+        "text": "E01/E02/E04",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E04"
+        ]
+      },
+      "P2": {
+        "text": "E04同居で失敗",
+        "evidenceIds": [
+          "E04"
+        ]
+      },
+      "P3": {
+        "text": "E07往路のみ",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "P4": {
+        "text": "切替用の正常要件を捨て、経路レビューを改善しない（E01）",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "V1": {
+        "text": "E01/E02/E05/E06",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E05",
+          "E06"
+        ]
+      },
+      "V2": {
+        "text": "TCP状態/当該返答未確認（E01/E06）",
+        "evidenceIds": [
+          "E01",
+          "E06"
+        ]
+      },
+      "V3": {
+        "text": "E07は既に許可",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "V4": {
+        "text": "E08対象拠点/修復後を見ていない",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "C1": {
+        "text": "今回試行の失敗はE02、対応する非完了返答の観測はE05/E06/E07でも立証可能。有効経路はE04。図の固定IPだけでは当該試行の不成立は証明しない",
+        "evidenceIds": [
+          "E02",
+          "E05",
+          "E06",
+          "E07",
+          "E04"
+        ]
+      },
+      "C2": {
+        "text": "同じ5-tupleとseq/ackで両方向が一つのDR採取にあり10点",
+        "evidenceIds": []
+      },
+      "C3": {
+        "text": "独立状態条件は既知。E06の初期SYN0/状態なし/拒否で10点。Aの状態や承認だけは補助5点",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "W1": {
+        "text": "E05はBへ返答、E04は最長一致をmetricより先に適用。誤主張0点",
+        "evidenceIds": [
+          "E05",
+          "E04"
+        ]
+      },
+      "W2": {
+        "text": "E05の同一接続返答はDR.bへ出るため0点",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "W3": {
+        "text": "E06は初期SYN0/状態なし/拒否、誤主張0点",
+        "evidenceIds": [
+          "E06"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "既知の独立状態/現用経路と切替要件。C3補助。公知仕様の再添付を必須にしない。",
+      "E02": "10:00の新規試行.70失敗/.140成功。C1の当該試行側の一つ。図の固定IPだけでは試行不成立を証明しない。",
+      "E03": "BR有効往路全件。往路B説を反証し、送信元で分散する条件はない。",
+      "E04": "DR有効表全件と最長一致。C1経路側。E02/E05/E06/E07いずれとの相関も受理する。",
+      "E05": "同一新規接続の往復/seq対応。C2単独満点、C1当該返答不成立側の代替。",
+      "E06": "FW-B初期SYN0/状態なし/当該返答拒否。C3単独満点、C1当該不成立側の代替。既知の正常仕様どおりの拒否を故障としない。",
+      "E07": "FW-Aの10:00:00–10:00:15 TCP状態と09:50–10:05リンクの別区間。observedAt10:05。C1当該不成立側の代替、C3補助。FW-Bリンクをこの資料に足さない。",
+      "E08": "サービスの正常対照。全停止ではSYN-ACKが別枝に出る因果を説明できず、対象端末の修復後結果ではない。",
+      "E09": "不要な検証/26の取り込み。保全してから撤去する差分。誰の悪意か推測しない。",
+      "E10": "票の表示順の別件。TCP経路の説明にしない。未確定票を何度も送信しない業務注意は作者の実施計画へ残す。"
+    }
+  }
+}
