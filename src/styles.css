@@ -1636,3 +1636,16 @@ summary {
   .title-footnote { margin-top: 12px; }
   .title-edition { bottom: 12px; }
 }
+
+/* Study reference: compact categories and searchable cards on narrow screens. */
+.glossary-tools { position: sticky; top: 0; z-index: 1; background: var(--paper); padding-bottom: 10px; }
+.glossary-search { display: grid; gap: 6px; font-weight: 700; }
+.glossary-search input { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 10px; }
+.glossary-sections { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 10px; }
+.glossary-sections button { padding: 9px 3px; font-size: 0.875rem; overflow-wrap: anywhere; }
+.glossary-sections button[aria-pressed="true"] { background: var(--selected); border-color: var(--accent); }
+.glossary-caption { margin: 8px 0; }
+.glossary > div { padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.glossary dd { margin-left: 0; overflow-wrap: anywhere; }
+.glossary .glossary-port { font-family: ui-monospace, Consolas, monospace; color: var(--accent); font-weight: 700; margin-bottom: 5px; }
+.glossary .glossary-note { margin-top: 6px; color: var(--muted); }
