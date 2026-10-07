@@ -19,7 +19,7 @@ function endpoints(a: Point, b: Point): Point[] {
 function NetworkMap({ scenario, selected, choose, zoom }: { scenario: PlayableScenario; selected: string | null; choose: (id: string) => void; zoom?: number }) {
   const layout = getLayout(scenario);
   const arrow = useId().replace(/:/g, "") + "-arrow";
-  return <div className={`map-panel ${zoom ? "map-expanded" : `map-overview${layout.legend ? " map-security" : ""}`}`}>
+  return <div className={`map-panel ${layout.compactOverview ? "map-network " : ""}${zoom ? "map-expanded" : `map-overview${layout.legend ? " map-security" : ""}`}`}>
     <svg viewBox={`0 0 ${layout.width} ${layout.height}`} role="group" aria-label="ネットワーク構成図：線種と矢印の意味は図中と文字説明の凡例を参照" style={zoom ? {width:layout.width*zoom,height:layout.height*zoom} : undefined}>
       <defs><marker id={arrow} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--map-line)"/></marker></defs>
       <text x="14" y="16" className="map-caption">NETWORK TOPOLOGY / CASE {scenario.id.slice(4)}</text>
@@ -35,6 +35,10 @@ function NetworkMap({ scenario, selected, choose, zoom }: { scenario: PlayableSc
           {spec.labels?.map((l,i)=><text key={i} x={l.at[0]} y={l.at[1]} className="map-link-label">{l.text}</text>)}
         </g>;
       })}
+      {layout.overlays?.map((spec,i)=><g key={i} className="map-overlay" aria-hidden="true">
+        <polyline points={spec.points.map(p=>p.join(",")).join(" ")} className={`map-link ${spec.kind ?? "network"}`} markerStart={spec.arrows === "both" ? `url(#${arrow})` : undefined} markerEnd={spec.arrows !== "none" ? `url(#${arrow})` : undefined}/>
+        {spec.labels?.map((l,j)=><text key={j} x={l.at[0]} y={l.at[1]} className="map-link-label">{l.text}</text>)}
+      </g>)}
       {scenario.topology.nodes.map(n=>{
         const spec = layout.nodes[n.id]; const [x,y] = spec.at;
         const lines = spec.lines ?? n.addresses.slice(0,2);

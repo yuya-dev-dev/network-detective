@@ -1,0 +1,943 @@
+{
+  "schemaVersion": 1,
+  "id": "case12",
+  "revision": 1,
+  "title": "隣の棟は遠い",
+  "type": "network",
+  "difficulty": 2,
+  "estimatedMinutes": 25,
+  "prerequisites": [
+    "IP・経路・ネットワーク機器の概要（用語辞典で確認できます）"
+  ],
+  "brief": "町の資料館のデジタル閲覧室から依頼が届いた。貸出端末で予約資料を開くと待ち続けるのに、開館案内は表示されるという。司書は来館者へ閲覧の見通しを伝えたい。運用担当は端末ごとの場当たり的な調整を避け、管理された状態で使えるようにしたい。閲覧LANと保管サーバLANは分けて運用し、貸出端末は承認されたIP、マスク、ゲートウェイ、DNSをDHCPで受け取る決まりだ。資料と案内のHTTPSをどちらも使える条件を守りながら、止まる範囲と原因を記録から調べてほしい。設定を変える前の資料は揃っている。変更の履歴だけで誰かの責任を決めず、記録を保存し、修復とその後の確認を報告する。",
+  "context": {
+    "baseline": [
+      "閲覧LANは10.60.8.0/24（VLAN108）、保管サーバLANは10.60.9.0/24（VLAN109）。閲覧端末はDHCPで10.60.8.100–150、マスク255.255.255.0、GW10.60.8.1、DNS10.70.0.53を得る。資料サーバcatalog.museum.example=10.60.9.20のHTTPS/TCP443と案内10.70.0.20/TCP443を使う。図の/24は設計値であって端末実測値ではない。"
+    ],
+    "assumptions": [
+      "単一有線NIC、IPv4だけ。端末は宛先が自身の接続ネットワーク内なら宛先へARP、外ならGWへARPして送る。静的ルートなし。L3はVLAN108/109を別のブロードキャスト領域としproxy ARPは無効。DHCPサーバはrelayのgiaddrにより対象scopeを選ぶ（本製品ではoption82等の選択なし）。scopeのmaskは独立設定で管理ミスを受け付ける。範囲を/23にしたい業務要件はない。",
+      "閲覧PC-Rと固定確認PC-Fは閲覧L2-SWのGi1/0/1、Gi1/0/2へ接続する。SW Gi1/0/24から館内L3 Gi1へVLAN108のタグ付きリンクを通る。L3 Gi2は保管VLAN109、Gi3は案内・DNS・DHCPのサービス網へ接続する。閲覧10.60.8.0/24、保管10.60.9.0/24、サービス10.70.0.0/24は別境界。L3は10.60.8.1、10.60.9.1、10.70.0.1。資料はGW10.60.9.1、案内はGW10.70.0.1を使う。TCP443は端末から資料・案内へ要求し、応答は逆方向。DNSは端末→10.70.0.53 UDP/TCP53、DHCPは端末UDP68↔relay↔DHCP UDP67でgiaddr10.60.8.1。凡例は実線が物理接続、破線が同じ物理経路上のDHCP交換。P1はPC-R NIC、P2はL3閲覧SVI、P3はDHCP応答。",
+      "全資料は2026-10-07T10:30:00+09:00に取得・整理済みで、調査開始時から任意順に閲覧できる。機器は同期済み。本文の未指定日付は2026-10-07、時刻はJST。observedAtは状態又は収録終端以後の観測時刻で、取得とは分ける。前日資料は2026-10-06を明記。diagnosticも設定変更前の固定記録で、欠落なしは各資料の明記範囲だけに限る。"
+    ],
+    "snapshotTime": "2026-10-07T10:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "reader",
+        "label": "閲覧PC-R",
+        "kind": "client",
+        "addresses": [
+          "10.60.8.121",
+          "NIC→access Gi1/0/1"
+        ]
+      },
+      {
+        "id": "fixed",
+        "label": "固定確認PC-F",
+        "kind": "client",
+        "addresses": [
+          "10.60.8.10/24",
+          "Gi1/0/2"
+        ]
+      },
+      {
+        "id": "sw",
+        "label": "閲覧L2-SW",
+        "kind": "switch",
+        "addresses": [
+          "uplink Gi1/0/24 tagged108"
+        ]
+      },
+      {
+        "id": "l3",
+        "label": "館内L3",
+        "kind": "router",
+        "addresses": [
+          ".8.1・.9.1・10.70.0.1",
+          "Gi1 trunk108、Gi2 VLAN109、Gi3 services"
+        ]
+      },
+      {
+        "id": "catalog",
+        "label": "資料",
+        "kind": "service",
+        "addresses": [
+          "10.60.9.20/24 GW .9.1",
+          "TCP443"
+        ]
+      },
+      {
+        "id": "guide",
+        "label": "案内",
+        "kind": "service",
+        "addresses": [
+          "10.70.0.20/24 GW .0.1",
+          "TCP443"
+        ]
+      },
+      {
+        "id": "dns",
+        "label": "DNS",
+        "kind": "service",
+        "addresses": [
+          "10.70.0.53",
+          "UDP/TCP53"
+        ]
+      },
+      {
+        "id": "dhcp",
+        "label": "DHCP",
+        "kind": "service",
+        "addresses": [
+          "10.70.0.67",
+          "UDP67、relay"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_READER",
+        "from": "reader",
+        "to": "sw",
+        "label": "PC-R NIC→Gi1/0/1、閲覧VLAN108"
+      },
+      {
+        "id": "L_FIXED",
+        "from": "fixed",
+        "to": "sw",
+        "label": "PC-F→Gi1/0/2、閲覧VLAN108"
+      },
+      {
+        "id": "L_UPLINK",
+        "from": "sw",
+        "to": "l3",
+        "label": "Gi1/0/24↔L3 Gi1、tagged108"
+      },
+      {
+        "id": "L_CATALOG",
+        "from": "l3",
+        "to": "catalog",
+        "label": "Gi2・保管VLAN109、TCP443の要求と逆向き返答"
+      },
+      {
+        "id": "L_GUIDE",
+        "from": "l3",
+        "to": "guide",
+        "label": "Gi3・サービス網、TCP443の要求と逆向き返答"
+      },
+      {
+        "id": "L_DNS",
+        "from": "l3",
+        "to": "dns",
+        "label": "サービス網、UDP/TCP53"
+      },
+      {
+        "id": "L_DHCP",
+        "from": "l3",
+        "to": "dhcp",
+        "label": "サービス網、relay giaddr10.60.8.1、UDP67/68交換"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "配布仕様",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "承認済み閲覧室IP設計",
+      "nodeIds": [
+        "reader",
+        "l3",
+        "dhcp",
+        "catalog"
+      ],
+      "observedAt": "2026-10-06T17:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-06 17:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "2026-10-06 17:00版。VLAN108=10.60.8.0/24、scope READER: pool10.60.8.100–150, mask255.255.255.0, router10.60.8.1, DNS10.70.0.53。VLAN109=10.60.9.0/24、資料10.60.9.20。既存設計の変更承認なし。案内と資料は両方利用対象。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "PC-Rの設定",
+      "kind": "config",
+      "acquisition": "diagnostic",
+      "source": "PC-R設定とIPv4経路の採取",
+      "nodeIds": [
+        "reader"
+      ],
+      "observedAt": "2026-10-07T10:05:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:05 IPv4=10.60.8.121、mask=255.255.254.0(/23)、GW=10.60.8.1、DNS=10.70.0.53、DHCP=enabled、server=10.70.0.67。接続経路10.60.8.0/23 on-link、default via10.60.8.1。ルート全件はこの2本、NIC1本、lease取得09:55:00。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "PC-Rの実通信",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P1端末NIC採取",
+      "nodeIds": [
+        "reader",
+        "sw",
+        "l3",
+        "catalog"
+      ],
+      "observedAt": "2026-10-07T10:07:10+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:07:10 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:07:00–10:07:10、PC-Rから資料へ接続1回、フィルタなし・欠落0。10:07:00/01/03 ARP who-has10.60.9.20 tell10.60.8.121。応答0、TCP SYN送出0。10:07:05案内へはARP who-has10.60.8.1→L3応答、そのMAC宛てTCP10.70.0.20:443、HTTPS200。資料宛てはGWへ送っていない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "DHCPの有効scope",
+      "kind": "config",
+      "acquisition": "document",
+      "source": "DHCP実行設定export",
+      "nodeIds": [
+        "dhcp",
+        "l3"
+      ],
+      "observedAt": "2026-10-07T10:08:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:08:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:08有効設定：READER selected_by giaddr10.60.8.1、pool10.60.8.100–150、option1=255.255.254.0、option3=10.60.8.1、option6=10.70.0.53。未使用空き27、競合検出0。ほかscope SERVICE=10.70.0.0/24 option1=255.255.255.0。option82/端末別上書きなし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "名前解決",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "PC-RからDNS問い合わせ記録",
+      "nodeIds": [
+        "reader",
+        "dns",
+        "catalog"
+      ],
+      "observedAt": "2026-10-07T10:06:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:06:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:06 PC-R→10.70.0.53 UDP53、catalog.museum.example A応答NOERROR10.60.9.20 TTL300。guide.museum.example A応答10.70.0.20。承認台帳と一致、AAAAなし。問い合わせ応答の全件2件。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "配布のワイヤ記録",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P3 relay/DHCP採取",
+      "nodeIds": [
+        "reader",
+        "l3",
+        "dhcp"
+      ],
+      "observedAt": "2026-10-07T09:55:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:55:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:54:58–09:55:00 xid0x0101、client PC-R: DISCOVER relay giaddr10.60.8.1→server10.70.0.67。OFFER/REQUEST/ACK同一xid、ACK yiaddr10.60.8.121, option1=255.255.254.0, option3=10.60.8.1, option6=10.70.0.53, lease8h。配布サーバID10.70.0.67。この交換の欠落0、重複応答なし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "固定端末とサーバ側の比較",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "PC-F業務通信/資料サービス診断",
+      "nodeIds": [
+        "fixed",
+        "l3",
+        "catalog"
+      ],
+      "observedAt": "2026-10-07T10:09:10+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:09:10 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:09 PC-F10.60.8.10/24から資料へGW .8.1経由TCP443、HTTPS200、資料ID A-18閲覧成功。資料はlisten443、GW .9.1、CPU18%、HTTPS自己診断200。保存データ件数は正常。PC-Fは障害後も変更していない固定設定、PC-Rを直した試験ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "L3とリンクの状態",
+      "kind": "config",
+      "acquisition": "diagnostic",
+      "source": "L3状態/許可設定",
+      "nodeIds": [
+        "sw",
+        "l3"
+      ],
+      "observedAt": "2026-10-07T10:10:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:10:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:10 SVI108=10.60.8.1/24 up、SVI109=10.60.9.1/24 up、10.70.0.1/24 up。直結3経路、108→109 TCP443許可、逆は応答許可。proxy ARP全SVI off。09:50–10:10 uplink link flap0、CRC0。P2はE03の資料宛てIPを受信していない。この範囲のIPフィルタ記録欠落0、資料deny0。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "運用変更票",
+      "kind": "log",
+      "acquisition": "document",
+      "source": "DHCPscope変更履歴",
+      "nodeIds": [
+        "dhcp"
+      ],
+      "observedAt": "2026-10-07T09:40:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:40:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:40台帳取り込みでREADER option1が255.255.255.0→255.255.254.0。他フィールド変更なし。作業者本人の手動端末調整はなし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "閲覧席の案内",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "公開案内板版記録",
+      "nodeIds": [
+        "guide"
+      ],
+      "observedAt": "2026-10-07T09:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:00開館案内のタイトルを「秋の特集」へ変更、本文更新完了。ネットワーク/資料サーバ/DHCPの設定は変更対象外。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H3",
+      "label": "資料HTTPSの停止",
+      "description": "資料HTTPSサービスが停止し、届いた接続開始の要求へサーバが応答できなかった"
+    },
+    {
+      "id": "H4",
+      "label": "DHCPアドレスの枯渇",
+      "description": "DHCPの空きアドレスがなく、端末は必要な設定を取得できず資料利用を開始できなかった"
+    },
+    {
+      "id": "H5",
+      "label": "L3による資料TCP拒否",
+      "description": "L3の許可設定が資料TCP443を拒否し、端末から到着した接続開始パケットを遮断した"
+    },
+    {
+      "id": "H1",
+      "label": "配布マスクの不一致",
+      "description": "READERの配布マスクが/23となり、端末が別VLANの資料宛先を同じ接続網として扱った"
+    },
+    {
+      "id": "H2",
+      "label": "資料名の誤解決",
+      "description": "DNSの資料Aレコードが誤り、端末は承認された資料サーバとは別の宛先へ接続した"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S2",
+        "label": "資料サービス全体",
+        "description": "資料サーバの全利用者を対象とし、接続元に関係なく資料サービス全体の停止として扱う"
+      },
+      {
+        "id": "S3",
+        "label": "館内の全IP通信",
+        "description": "館内の全IP通信を対象とし、案内・名前解決・資料利用が共通して停止していると扱う"
+      },
+      {
+        "id": "S4",
+        "label": "名前解決のみ",
+        "description": "名前解決だけを対象とし、端末からの通信開始や資料HTTPSの利用は正常として扱う"
+      },
+      {
+        "id": "S1",
+        "label": "DHCP端末の資料閲覧",
+        "description": "DHCPを新規取得した閲覧端末の資料閲覧を対象とし、案内利用や固定端末とは分けて扱う"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H3",
+        "label": "資料HTTPSの停止",
+        "description": "資料HTTPSサービスが停止し、届いた接続開始の要求へサーバが応答できなかった"
+      },
+      {
+        "id": "H4",
+        "label": "DHCPアドレスの枯渇",
+        "description": "DHCPの空きアドレスがなく、端末は必要な設定を取得できず資料利用を開始できなかった"
+      },
+      {
+        "id": "H5",
+        "label": "L3による資料TCP拒否",
+        "description": "L3の許可設定が資料TCP443を拒否し、端末から到着した接続開始パケットを遮断した"
+      },
+      {
+        "id": "H1",
+        "label": "配布マスクの不一致",
+        "description": "READERの配布マスクが/23となり、端末が別VLANの資料宛先を同じ接続網として扱った"
+      },
+      {
+        "id": "H2",
+        "label": "資料名の誤解決",
+        "description": "DNSの資料Aレコードが誤り、端末は承認された資料サーバとは別の宛先へ接続した"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "W1",
+        "label": "別宛先へのTCP送出",
+        "description": "資料名のA応答は承認先と異なり、端末は別のサーバへTCPを送出している",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C1",
+        "label": "端末の現行マスク",
+        "description": "閲覧端末の現行マスクは承認された/24と異なる/23である",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "W2",
+        "label": "資料CPUと固定端末の失敗",
+        "description": "資料サーバはCPUが飽和し、固定端末からのHTTPS閲覧も失敗している",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C2",
+        "label": "名前解決と資料ARP",
+        "description": "資料名は正しく解決されたが、PC-Rは資料宛てにARPしTCPを始めていない",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W3",
+        "label": "ACK未配布と設定未取得",
+        "description": "READERの空きがなくPC-RにACKが配布されず、設定未取得が資料の停止を起こした",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C3",
+        "label": "配布値と有効scope",
+        "description": "PC-Rへ配布された/23は、READERの有効option1と一致する",
+        "requiredEvidenceCount": 2
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R1",
+        "label": "配布マスクを戻し再取得",
+        "description": "配布・端末・通信記録を保存し、READER option1を/24へ戻して対象端末に再取得させ、LAN境界を維持する"
+      },
+      {
+        "id": "R2",
+        "label": "DNSキャッシュを削除",
+        "description": "配布・端末・通信記録を保存し、DNSキャッシュを削除して再問い合わせさせ、現行の配布値とLAN境界は維持する"
+      },
+      {
+        "id": "R3",
+        "label": "資料サービスを再起動",
+        "description": "配布・端末・通信記録を保存し、資料サービスを再起動して要求を受け直し、配布値と端末設定は維持する"
+      },
+      {
+        "id": "R4",
+        "label": "閲覧・保管VLANを統合",
+        "description": "配布・端末・通信記録を保存し、閲覧と保管VLANを統合して資料へ直接届くようにし、現在の配布値を維持する"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P2",
+        "label": "案内表示で受入判定",
+        "description": "案内ページの表示を定期検査し、その成功を資料利用を含む受入判定にして、現在の配布管理を維持する"
+      },
+      {
+        "id": "P3",
+        "label": "管理外の固定IPへ変更",
+        "description": "貸出端末を管理外の固定IPへ切り替え、担当者が端末ごとの値を確認し、現在の資料サービスを維持する"
+      },
+      {
+        "id": "P4",
+        "label": "proxy ARPで差を吸収",
+        "description": "全SVIでproxy ARPを有効にしてマスク差を吸収し、案内と資料の応答を検査して、現在の配布設定を維持する"
+      },
+      {
+        "id": "P1",
+        "label": "設計照合と実取得試験",
+        "description": "scopeをIP設計と照合し、実取得でmask・GW・DNSと別VLANの業務通信を検査して、自動管理を維持する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V3",
+        "label": "案内pingだけで判定",
+        "description": "対象端末から案内へのpingを確認し、その応答を資料を含む利用の判定にして、HTTPSの追加試験は省略する"
+      },
+      {
+        "id": "V4",
+        "label": "固定端末の過去値で判定",
+        "description": "保存済みの固定端末のHTTPS200を確認し、その対照を復旧判定にして、対象端末の再取得後試験は省略する"
+      },
+      {
+        "id": "V1",
+        "label": "再取得と両サービスを確認",
+        "description": "再取得後の/24・GW・DNSを確認し、資料TCP443のGW経由と閲覧、案内利用も確認して、両LANの境界を確かめる"
+      },
+      {
+        "id": "V2",
+        "label": "DHCP ACKだけで判定",
+        "description": "再取得時のDHCPACKの存在を確認し、その応答を設定受入の判定にして、資料閲覧の追加試験は省略する"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "IPを得たことと、その設定で正しい経路を選べることは別。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "設計値と端末のmaskで、資料の宛先を同一ネットワークと考えるか比べる。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "/23は10.60.8/24と10.60.9/24を含む。端末が資料へARPした理由を配布元まで追う。",
+      "evidenceIds": []
+    }
+  ],
+  "glossary": [
+    {
+      "term": "DHCP",
+      "definition": "IPアドレス、マスク、ゲートウェイ等の設定を端末へ配布する仕組み"
+    },
+    {
+      "term": "option1",
+      "definition": "DHCPで配布するサブネットマスクの項目"
+    },
+    {
+      "term": "giaddr",
+      "definition": "DHCP relayがクライアント側ネットワークを識別するために使うアドレス"
+    },
+    {
+      "term": "CIDR",
+      "definition": "/nでネットワーク部分のビット数を表す表記"
+    },
+    {
+      "term": "ARP",
+      "definition": "同じL2の範囲で、IPv4アドレスに対応するMACアドレスを調べる仕組み"
+    },
+    {
+      "term": "ゲートウェイ（GW）",
+      "definition": "別のネットワークへ送る際の次ホップとなる機器"
+    },
+    {
+      "term": "proxy ARP",
+      "definition": "別ネットワーク宛てのARPへ機器が代理応答する機能。使用の有無は設定による"
+    },
+    {
+      "term": "VLAN",
+      "definition": "スイッチ上で論理的に分けるL2の範囲"
+    },
+    {
+      "term": "on-link",
+      "definition": "端末が同じ接続ネットワーク上にあると扱う宛先"
+    },
+    {
+      "term": "SVI",
+      "definition": "VLANに対応する論理的なL3インターフェース"
+    },
+    {
+      "term": "ACK",
+      "definition": "DHCPの設定配布を承認する応答。存在だけで全設定の適切さが分かるわけではない"
+    },
+    {
+      "term": "TCP SYN",
+      "definition": "TCP接続を開始する際に送るパケット"
+    },
+    {
+      "term": "HTTPS",
+      "definition": "TLSで保護されたHTTP通信"
+    }
+  ],
+  "solution": {
+    "scopeId": "S1",
+    "causeId": "H1",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E01",
+          "E06"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E03",
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E04",
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E09"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "R1",
+    "preventionId": "P1",
+    "verificationId": "V1",
+    "criticalOptionIds": [
+      "R4"
+    ],
+    "causalChain": [
+      {
+        "text": "症状と正常要件：PC-Rでは資料閲覧の通信が始まらず、案内利用は成功しています（E03）。閲覧と保管は別LANとして設計され、端末には/24のマスクを配布する要件があります（E01）。待ち続ける画面だけで資料サービス全体や館内全通信の停止とは判断しません。",
+        "evidenceIds": [
+          "E03",
+          "E01"
+        ]
+      },
+      {
+        "text": "端末の現行状態：PC-Rは10.60.8.121/23で、接続経路は10.60.8.0/23 on-link、defaultは10.60.8.1です。静的ルートや別NICはありません（E02）。資料10.60.9.20はこの/23に含まれるため、端末は同じ接続ネットワークの宛先として扱います。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      {
+        "text": "実際の送出と境界：PC-Rは資料へ直接ARPし、応答は0、TCP SYNも0。案内へはGWへARPしてHTTPSが成功しています（E03）。資料は別VLANにあり、L3のproxy ARPは無効です（E08）。直接のARPは資料のL2まで越えられず、資料へのTCPが始まりません。L3が受け取って拒否した資料TCPではありません。",
+        "evidenceIds": [
+          "E03",
+          "E08"
+        ]
+      },
+      {
+        "text": "配布元までの対応：資料名のA応答は正しい（E05）、資料サービスと固定PC-Fの閲覧も正常です（E07）。DHCPのREADER有効option1は/23で（E04）、PC-RのACKも/23です（E06）。変更票にはoption1だけ/24から/23へ変わった記録があります（E09）。履歴だけで決めるのでなく、有効設定と実配布が一致することまで確認し、配布マスクの不一致を原因とします。作業者の意図や悪意は断定しません。",
+        "evidenceIds": [
+          "E05",
+          "E07",
+          "E04",
+          "E06",
+          "E09"
+        ]
+      },
+      {
+        "text": "修復と維持する条件：配布・端末・通信記録を保存し、READER option1を承認された/24へ戻して対象端末に再取得させます（E01/E04/E06）。閲覧・保管の境界とDHCP管理を保ちます。DNSキャッシュ削除や資料再起動では配布値を変えられません（E05/E07）。VLAN統合は承認された境界を壊すため採りません。",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E06",
+          "E05",
+          "E07"
+        ]
+      },
+      {
+        "text": "今後の確認と再発防止：再取得後の端末で/24、GW、DNSを確認し、資料TCP443がGW経由で始まり閲覧できることと案内利用を確認します。これは変更前の診断（E02/E03/E05）で見た観点を、実施後の対象端末に適用する計画です。PC-Fの過去の200でPC-Rの復旧を宣言しません（E07）。配布scopeを承認設計と照合し、実取得値と別VLAN通信まで検査して再発を防ぎます。修復後の成功は今回まだ観測していません。",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E05",
+          "E07"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H3": {
+        "text": "E07同一サービス正常",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H4": {
+        "text": "E04空き/E06ACK",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      "H5": {
+        "text": "E08許可、E03SYN未送出。",
+        "evidenceIds": [
+          "E08",
+          "E03"
+        ]
+      },
+      "H1": {
+        "text": "E01/E02/E04/E06",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E04",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E05正しい",
+        "evidenceIds": [
+          "E05"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S1": {
+        "text": "E02/E03/E06、対象を全館や資料停止へ広げない",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E06"
+        ]
+      },
+      "S2": {
+        "text": "E07固定対照正常",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "S3": {
+        "text": "E03案内正常",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "S4": {
+        "text": "E05正常でE03通信段階はARP",
+        "evidenceIds": [
+          "E05",
+          "E03"
+        ]
+      },
+      "H1": {
+        "text": "E01/E02/E04/E06",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E04",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E05正しい",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "H3": {
+        "text": "E07同一サービス正常",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H4": {
+        "text": "E04空き/E06ACK",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      "H5": {
+        "text": "E08許可、E03SYN未送出。",
+        "evidenceIds": [
+          "E08",
+          "E03"
+        ]
+      },
+      "R1": {
+        "text": "E01/E04/E06",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E06"
+        ]
+      },
+      "R2": {
+        "text": "E05正しい",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "R3": {
+        "text": "E07正常、配布設定は残る",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "R4": {
+        "text": "E01境界要件を壊す",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "P1": {
+        "text": "E01/E06/E08",
+        "evidenceIds": [
+          "E01",
+          "E06",
+          "E08"
+        ]
+      },
+      "P2": {
+        "text": "E03資料の差を見逃す",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "P3": {
+        "text": "自動管理要件を捨てる（E01）",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "P4": {
+        "text": "E01の正しい配布を保証しない",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "V1": {
+        "text": "E02/E03/E05",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E05"
+        ]
+      },
+      "V2": {
+        "text": "E06は誤値でもACK",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "V3": {
+        "text": "資料HTTPSを検証しない（E01/E03）",
+        "evidenceIds": [
+          "E01",
+          "E03"
+        ]
+      },
+      "V4": {
+        "text": "対象の修復後状態ではない（E07）",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "C1": {
+        "text": "正常要件/24は既知。E02の現行値だけで10点。E01の要件やE06の配布時点だけでは現行の確定に不足して5点",
+        "evidenceIds": [
+          "E02",
+          "E01",
+          "E06"
+        ]
+      },
+      "C2": {
+        "text": "名前解決と実送出の観測を結ぶ。単独の片側は5点",
+        "evidenceIds": []
+      },
+      "C3": {
+        "text": "有効scopeと当該ACKを結ぶ。変更履歴だけは補助5点",
+        "evidenceIds": []
+      },
+      "W1": {
+        "text": "E05のA応答は承認先に一致し、E03で資料宛てSYNは送出0。二つの観測の結び方が誤りなので0点",
+        "evidenceIds": [
+          "E05",
+          "E03"
+        ]
+      },
+      "W2": {
+        "text": "E07のCPU18%と固定端末HTTPS200に反するため0点",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "W3": {
+        "text": "E04の空きとE06のACKがこの組合せを反証。誤主張0点",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "承認設計と既知の正常要件。C1補助。現行値を確定する必須カードとはしない。境界を壊す修復の判定。",
+      "E02": "現行PC-Rの値と全2経路。C1単独満点。既知の/24との差はこの実測だけで成立。",
+      "E03": "P1の送出と応答。C2の実通信側、全通信停止/L3拒否説の反証。資料TCPはGWへ送っていない",
+      "E04": "現行有効scope、選択条件、空き・競合と上書きなし。C3の有効設定側、枯渇説の反証",
+      "E05": "実DNS問い合わせと正しい応答。C2の名前解決側、DNS原因説の反証。TCP成功は示さない",
+      "E06": "欠落・重複のない当該DHCP交換。C3配布側、C1補助。ACKは枯渇/未取得説を反証するが取得時点を現行値の代わりにしない。",
+      "E07": "固定PC-Fと資料サービスの正常対照。サービス停止/CPU飽和/全利用者停止説の反証。PC-R修復後の試験ではない",
+      "E08": "別VLANのSVI、許可、proxy ARP無効、リンク状態、P2非受信とdeny0。因果の境界条件。正常対照を正主張の矛盾へ扱わない",
+      "E09": "option1のみの変更履歴。C3補助。履歴は現在の有効設定/実配布の代わりではなく、人物の意図や悪意を推測しない。",
+      "E10": "公開案内の版更新。時刻が近いだけで因果へ結ばない。正主張の矛盾証拠ではない。"
+    }
+  }
+}

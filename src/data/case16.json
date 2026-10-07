@@ -1,0 +1,932 @@
+{
+  "schemaVersion": 1,
+  "id": "case16",
+  "revision": 1,
+  "title": "拍手に埋もれた声",
+  "type": "network",
+  "difficulty": 3,
+  "estimatedMinutes": 35,
+  "prerequisites": [
+    "IP・経路・ネットワーク機器の概要（用語辞典で確認できます）"
+  ],
+  "brief": "地域配信スタジオのリハーサルで、通訳拠点への音声連絡が聞き取りにくくなった。配信調整の長谷は、画面が映るだけで準備完了とは言えず、通訳者との呼吸を合わせたい。運用担当の戸川は、日中に進める素材送信も続けながら専用端末の品質を戻したい。認定音声端末のマークを保持し、認定外の素材通信は優先扱いにしない境界の決まりがある。両業務の同時利用中に、スタジオから通訳拠点へ送る音声の受信間隔変動と損失を基準内に保つことが依頼だ。設定変更前の測定、採取、比較試験から範囲と原因を調べ、記録を保全して修復と確認の計画を報告してほしい。今回測っていない映像や反対向きの音声まで、同じ障害と決めつけないでほしい。",
+  "context": {
+    "baseline": [
+      "認定音声端末M1=10.55.10.21/24（VLAN110）から受信10.95.0.20:5004/UDPへRTP音声を送る。M1音声はL3計測値2Mbit/sでDSCP46を付す。素材送信B1=10.55.20.30/24（VLAN120）→保存10.95.0.30:443/TCPはDSCP0で最大送出30Mbit/s。両業務を同時に行い、音声の受信間隔変動は最大40ms以下、損失率1%未満とする。受信間隔変動は本事件の指標「受信間隔と送信間隔の差の絶対値の最大」、一般的なRFCのjitter定義とは異なる。"
+    ],
+    "assumptions": [
+      "SW-EはL3/境界装置。承認ポリシーは管理されたM1接続Gi1だけDSCPを保持、Gi2素材側はDSCP0へ書換、uplinkで追加書換なし。WAN-RはSW後のIPv4 DSCP46をQ-VOICE、他をQ-BEへ分類。分類規則/キューは有効表の全件、アプリ自動判定や別trustはなし。WAN出力はL3換算20Mbit/sのshaper、Q-VOICE優先最大4Mbit/s（超過はpolicer）、Q-BEは残余。今回は音声2Mbit/sでVOICE上限以内。単位は全て10進、各測定はIP総量で揃え、リンクヘッダ/圧縮差なし。QoSで総帯域は増えず、素材BEは遅延/再送が許容される。Wi-Fi/NAT/tunnel暗号化なし、音声のDSCPはアプリで検証済み設定、秘密はない。全経路MTU1500。M1音声はIP総長250byte（IPv4/UDP/RTPヘッダを含む）を1000ppsで送り、断片化なしでIP総量2Mbit/sとなる。",
+      "音声の文字経路：M1→SW-E→WAN-R→通訳拠点R→音声受信UDP5004。素材の文字経路：B1→SW-E→WAN-R→通訳拠点R→素材保存TCP443。凡例は実線矢印が音声、点線矢印が素材。両者は共有する物理リンク上の論理方向。SW-E SVI110=10.55.10.1/24、SVI120=10.55.20.1/24、Gi24 172.30.0.1/30↔WAN lan172.30.0.2/30は物理1Gbit/s。WAN 192.0.2.1/30↔remote192.0.2.2/30のWAN送出shaperは20Mbit/s、remote srv10.95.0.1/24から受信と保存へ分かれる。Q-VOICEとQ-BEはWAN-R内部のキュー。P1はSW Gi1入場前、P2はGi24送出後/WAN入力前、P3はWAN出力キュー、P4は受信。",
+      "全資料は2026-10-07T10:30:00+09:00に取得・整理済みで、調査開始時から任意順に閲覧できる。機器は同期済み。本文の未指定日付は2026-10-07、時刻はJST。observedAtは状態又は収録終端以後の観測時刻で、取得とは分ける。前日資料は2026-10-06を明記。diagnosticも設定変更前の固定記録で、欠落なしは各資料の明記範囲だけに限る。"
+    ],
+    "snapshotTime": "2026-10-07T10:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "media",
+        "label": "認定M1",
+        "kind": "client",
+        "addresses": [
+          "10.55.10.21/24 GW10.55.10.1、SW-E Gi1 access110"
+        ]
+      },
+      {
+        "id": "bulk",
+        "label": "素材B1",
+        "kind": "client",
+        "addresses": [
+          "10.55.20.30/24 GW10.55.20.1、SW-E Gi2 access120"
+        ]
+      },
+      {
+        "id": "edge",
+        "label": "SW-E",
+        "kind": "switch",
+        "addresses": [
+          "SVI110 .10.1、SVI120 .20.1、up172.30.0.1/30 Gi24"
+        ]
+      },
+      {
+        "id": "wan",
+        "label": "WAN-R",
+        "kind": "router",
+        "addresses": [
+          "lan172.30.0.2/30、wan192.0.2.1/30、出力20Mbit/s"
+        ]
+      },
+      {
+        "id": "remote",
+        "label": "通訳拠点R",
+        "kind": "router",
+        "addresses": [
+          "wan192.0.2.2/30、srv10.95.0.1/24"
+        ]
+      },
+      {
+        "id": "recv",
+        "label": "音声受信",
+        "kind": "service",
+        "addresses": [
+          "10.95.0.20/24 GW10.95.0.1 UDP5004"
+        ]
+      },
+      {
+        "id": "store",
+        "label": "素材保存",
+        "kind": "storage",
+        "addresses": [
+          "10.95.0.30/24 GW10.95.0.1 TCP443"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_MEDIA",
+        "from": "media",
+        "to": "edge",
+        "label": "M1→SW-E Gi1、access110・音声方向"
+      },
+      {
+        "id": "L_BULK",
+        "from": "bulk",
+        "to": "edge",
+        "label": "B1→SW-E Gi2、access120・素材方向"
+      },
+      {
+        "id": "L_UPLINK",
+        "from": "edge",
+        "to": "wan",
+        "label": "Gi24↔WAN lan、172.30.0.0/30・物理1Gbit/s"
+      },
+      {
+        "id": "L_WAN",
+        "from": "wan",
+        "to": "remote",
+        "label": "WAN↔通訳拠点、192.0.2.0/30・出力20Mbit/s、音声/素材共有"
+      },
+      {
+        "id": "L_RECV",
+        "from": "remote",
+        "to": "recv",
+        "label": "拠点srv→音声受信UDP5004"
+      },
+      {
+        "id": "L_STORE",
+        "from": "remote",
+        "to": "store",
+        "label": "拠点srv→素材保存TCP443"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "品質と境界ポリシー",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "配信スタジオ通信受入基準",
+      "nodeIds": [
+        "media",
+        "bulk",
+        "edge",
+        "wan",
+        "recv",
+        "store"
+      ],
+      "observedAt": "2026-10-06T17:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-06 17:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "2026-10-06 17:00版。M1音声2Mbit/s/DSCP46、Gi1保持、Gi2素材はDSCP0、VOICE優先4Mbit/s、WAN20Mbit/s。素材同時送信中にも音声受信間隔変動max≤40ms/損失<1%。素材はBEで遅れてよい、素材全停止を恒久条件にしない。許可端末以外の任意46マークは信頼しない。映像/逆方向は今回判定外。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "品質の2条件比較",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "M1/受信側固定比較試験",
+      "nodeIds": [
+        "media",
+        "bulk",
+        "recv",
+        "store",
+        "wan"
+      ],
+      "observedAt": "2026-10-07T10:05:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00–10:01素材なし：音声IP送出2Mbit/s、受信間隔変動max8ms、損失0.1%。10:04–10:05素材あり：音声同じ2Mbit/s、素材送出30Mbit/s、音声変動max180ms、損失8%。端末/接続/設定/音声内容は同じ。両1分の全パケット計測、時計同期済み、欠測なし。これはSW変更前の負荷比較、素材ありの合計送出32Mbit/s。素材の回線送出30Mbit/sではなくWAN手前のoffered load。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "境界を通る同じ音声",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P1/P2同時ミラー採取",
+      "nodeIds": [
+        "media",
+        "edge",
+        "wan"
+      ],
+      "observedAt": "2026-10-07T10:04:01+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:04:01 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:04:00–10:04:01、flow10.55.10.21:40004→10.95.0.20:5004/UDP、RTP stream M1-7 seq1200–2199の同じ1000packetを照合。この1秒の対象flow全数で、IP総長250byte/1000pps/2Mbit/s、MTU1500で断片化なし。P1 Gi1入場前DSCP46全1000、P2 Gi24送出後DSCP0全1000、ほかIP/port/seq一致。欠落0。P2はWAN-R入力前なのでここにWANキューの遅延を含めない。素材はP1 Gi2/P2ともDSCP0。ECN下位2bitは未使用0で不変。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "SW-Eの有効入力処理",
+      "kind": "config",
+      "acquisition": "document",
+      "source": "SW-E running-policy export",
+      "nodeIds": [
+        "edge",
+        "media",
+        "bulk"
+      ],
+      "observedAt": "2026-10-07T10:06:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:06:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:06 Gi1 access110 input reset_dscp=0、Gi2 access120 input reset_dscp=0、Gi24 output rewrite=none。Gi1にkeep-mark例外なし、ACL/分類の別上書きなし。M1-MACはGi1だけ、認定端末台帳一致、物理差し替えなし。resetは受信したDSCPを0へ変える架空製品の処理名。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "WAN-Rの分類・キュー規則",
+      "kind": "config",
+      "acquisition": "document",
+      "source": "WAN-R有効分類全件",
+      "nodeIds": [
+        "wan"
+      ],
+      "observedAt": "2026-10-07T10:06:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:06:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:06 DSCP46→Q-VOICE（優先4Mbit/s、超過policer）。DSCPその他→Q-BE（残余、有限FIFO、満杯drop）。wan shaper20Mbit/s（IP総量換算）、lan物理1Gbit/s。マーキングの再書換なし、queueの障害/自動分類なし。音声がBEに入れば素材と同一FIFOを競合する。priorityが一律帯域を保証するのではなく今回の承認2Mbit/sは上限以下。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "混雑時キュー統計",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P3 WAN-R分類差分と遅延",
+      "nodeIds": [
+        "wan",
+        "media",
+        "bulk"
+      ],
+      "observedAt": "2026-10-07T10:05:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:04–10:05 Q-VOICE音声分類0 packet、policer drop0。Q-BEにはM1音声と素材両flow、offered32Mbit/s、平均送出20Mbit/s、backlog持続、queue delay p95=150ms、max=175ms、full-dropあり。音声flowのWAN出力drop8%、素材flowにもdropあり。統計全区間、flow分類を含み欠測0。"
+          },
+          {
+            "type": "text",
+            "body": "p95キュー遅延とE02の最大間隔変動は異なる測定指標。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "物理と端末の対照",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "端末負荷/リンク/受信状態",
+      "nodeIds": [
+        "media",
+        "edge",
+        "wan",
+        "remote",
+        "recv"
+      ],
+      "observedAt": "2026-10-07T10:07:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:07:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:55–10:07全リンクup、CRC/linkflap0。M1有線Gi1、CPU17%、受信CPU22%、両方送受信処理遅延max2ms。SW-E/WAN-R/remote route変化なし、UDP5004許可、10:04–05音声WAN入力から受信までの全損失はE06WAN出力で一致。受信side以外で追加drop記録0。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "マークを指定したキュー対照",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "WAN-R入力の承認診断flow",
+      "nodeIds": [
+        "wan",
+        "remote",
+        "recv",
+        "bulk",
+        "store"
+      ],
+      "observedAt": "2026-10-07T10:10:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:10:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:09–10:10、音声本番端末を一時停止して診断源をWAN-R lanへ接続し、同じIP総量2Mbit/s/UDP5004/DSCP46を入力。素材は同じ30Mbit/s/0を継続。Q-VOICE診断flow2Mbit/s、policer0、診断受信間隔変動max10ms、損失0.2%、Q-BE素材平均18Mbit/s。SW-E設定は変えていない。この人工対照はキュー方式の比較で、本番M1修復後成功ではない。診断の終了後本番を再開、全証拠は調査開始前に採取済み。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "SW-Eテンプレート更新",
+      "kind": "log",
+      "acquisition": "document",
+      "source": "境界ポリシー変更票",
+      "nodeIds": [
+        "edge"
+      ],
+      "observedAt": "2026-10-07T09:30:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:30:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:30入力テンプレートを共通reset0へ。Gi1の認定音声keep-mark例外を引き継がなかった。物理/route/WANqueue/端末マーキングは変更なし。業務音声のみ素材なしで受入、素材同時欄は未確認。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "配信ポスター",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "スタジオ広報更新記録",
+      "nodeIds": [
+        "store"
+      ],
+      "observedAt": "2026-10-07T09:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:00ポスター画像を差し替え、素材保管のファイル名poster-b.webp。RTPの送信間隔/DSCP/ネットワークポリシーの変更なし。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H2",
+      "label": "M1が46を付けていない",
+      "description": "M1が送信時点から46を付けておらず、SW-Eへ入力される音声も最初から0だった"
+    },
+    {
+      "id": "H3",
+      "label": "VOICE上限の超過",
+      "description": "音声2Mbit/sがVOICEの4Mbit/s上限を超え、優先キューのpolicerで超過分が破棄された"
+    },
+    {
+      "id": "H4",
+      "label": "ケーブルのCRCエラー",
+      "description": "回線ケーブルのCRCエラーが音声を壊し、入力マークやキューとは別に損失を発生させた"
+    },
+    {
+      "id": "H5",
+      "label": "受信CPUの能力不足",
+      "description": "受信CPUの処理能力が不足し、正常に届いた音声を受信端末が処理しきれず品質を落とした"
+    },
+    {
+      "id": "H1",
+      "label": "境界でマークを書換えBE競合",
+      "description": "SW-E Gi1が音声46を0へ書き換え、混雑時に音声が素材と同じBEキューで競合した"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S2",
+        "label": "スタジオの全業務",
+        "description": "スタジオの全業務を対象とし、素材の送信と素材なし音声を含む共通の通信停止として扱う"
+      },
+      {
+        "id": "S3",
+        "label": "通訳拠点からの逆方向音声",
+        "description": "通訳拠点からスタジオへの逆方向音声を対象とし、今回の品質低下もその方向で発生したと扱う"
+      },
+      {
+        "id": "S4",
+        "label": "ポスター表示のみ",
+        "description": "ポスター表示だけを対象とし、音声の受信間隔変動や損失は業務上の品質問題として扱わない"
+      },
+      {
+        "id": "S1",
+        "label": "素材同時時の片方向音声",
+        "description": "素材同時送信中のスタジオM1から通訳拠点へのRTP音声を対象とし、映像と反対方向は判定外に置く"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H2",
+        "label": "M1が46を付けていない",
+        "description": "M1が送信時点から46を付けておらず、SW-Eへ入力される音声も最初から0だった"
+      },
+      {
+        "id": "H3",
+        "label": "VOICE上限の超過",
+        "description": "音声2Mbit/sがVOICEの4Mbit/s上限を超え、優先キューのpolicerで超過分が破棄された"
+      },
+      {
+        "id": "H4",
+        "label": "ケーブルのCRCエラー",
+        "description": "回線ケーブルのCRCエラーが音声を壊し、入力マークやキューとは別に損失を発生させた"
+      },
+      {
+        "id": "H5",
+        "label": "受信CPUの能力不足",
+        "description": "受信CPUの処理能力が不足し、正常に届いた音声を受信端末が処理しきれず品質を落とした"
+      },
+      {
+        "id": "H1",
+        "label": "境界でマークを書換えBE競合",
+        "description": "SW-E Gi1が音声46を0へ書き換え、混雑時に音声が素材と同じBEキューで競合した"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "C2",
+        "label": "本番音声のBE分類",
+        "description": "観測したM1音声のSW後DSCPはBEの分類に該当し、VOICEの対象条件を満たさない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "W2",
+        "label": "VOICE上限超過の破棄",
+        "description": "混雑時M1はVOICEに分類され、4Mbit/s上限超過のpolicer dropが記録された",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C3",
+        "label": "本番と46対照の品質差",
+        "description": "同じ素材30Mbit/s条件で、本番音声は品質を満たさず46入力対照は満たす",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W3",
+        "label": "素材有無も対照も同じ不良",
+        "description": "本番は素材の有無で品質が変わらず、人工46対照も素材同時時に品質基準を超えた",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W1",
+        "label": "対照は32Mbpsを損失なし送出",
+        "description": "人工46対照でWANは32Mbit/sを送出し、素材30と音声2を損失なしで同時転送した",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C1",
+        "label": "同じ音声の境界前後マーク",
+        "description": "同じM1音声packetのDSCPはSW-E前46、通過後0に変わる",
+        "requiredEvidenceCount": 1
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R1",
+        "label": "認定Gi1の46保持を復元",
+        "description": "採取・有効設定・キューを保全し、認定M1のGi1を46保持へ戻して、Gi2のDSCP0書換とVOICE上限を維持する"
+      },
+      {
+        "id": "R2",
+        "label": "全通信を46へ上書き",
+        "description": "採取・有効設定・キューを保全し、全ポートの全通信を46へ上書きして優先扱いにし、現在のWAN出力上限を維持する"
+      },
+      {
+        "id": "R3",
+        "label": "素材の送信を恒久停止",
+        "description": "採取・有効設定・キューを保全し、素材送信を恒久停止して負荷をなくし、Gi1の入力処理と現在のキューを維持する"
+      },
+      {
+        "id": "R4",
+        "label": "受信アプリを再起動",
+        "description": "採取・有効設定・キューを保全し、受信アプリを再起動して音声を受け直し、Gi1の入力処理と素材送信を維持する"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P2",
+        "label": "素材なし音声だけで受入",
+        "description": "素材なし音声の品質を定期測定し、その結果を同時業務の受入にも用いて、現在の境界ポリシーを維持する"
+      },
+      {
+        "id": "P3",
+        "label": "DSCP設定名だけで分類判定",
+        "description": "DSCPの設定名を定期点検し、その登録を実音声の分類判定として、境界後の採取を省き現在のキューを維持する"
+      },
+      {
+        "id": "P4",
+        "label": "回線増速だけで受入",
+        "description": "回線増速で品質を管理し、容量の余裕を受入判定として、認定マークと実分類の照合を省き現在の境界を維持する"
+      },
+      {
+        "id": "P1",
+        "label": "ポート差分と同時品質を受入",
+        "description": "認定ポート例外の差分を監査し、実マークと素材同時時の品質を受入として、認定外のDSCP0書換を維持する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V3",
+        "label": "素材停止時の音声で判定",
+        "description": "素材を止めた状態で音声を聞き、その成功を本番復旧判定にして、素材同時時の品質と実分類の追加試験は省略する"
+      },
+      {
+        "id": "V4",
+        "label": "人工対照の過去値で判定",
+        "description": "保存済み人工46対照の品質値を確認し、その比較結果を本番復旧判定にして、修復後M1の実測は省略する"
+      },
+      {
+        "id": "V1",
+        "label": "本番のマークと同時品質を確認",
+        "description": "本番M1の46保持・VOICE分類と素材同時30時の音声≤40ms・損失<1%を確認し、素材BEと認定外Gi2のDSCP0書換も確かめる"
+      },
+      {
+        "id": "V2",
+        "label": "SW設定文字だけで判定",
+        "description": "SW内の入力設定文字を確認し、その値を音声品質の復旧判定にして、実パケットと素材同時の受信測定は省略する"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "帯域の平均だけでなく、どのクラスのキューに入るかを見る。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "同じ音声packetのマークを境界前後で照合する。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "音声を優先する設定は存在する。分類前にマークが変わっていないか、同じ素材条件の対照と結ぶ。",
+      "evidenceIds": []
+    }
+  ],
+  "glossary": [
+    {
+      "term": "DSCP",
+      "definition": "IPヘッダの6ビットのクラス識別値"
+    },
+    {
+      "term": "46",
+      "definition": "EFに用いる推奨コード点。実際の処理は製品の公開分類規則による"
+    },
+    {
+      "term": "QoS",
+      "definition": "分類・キュー等を用いて通信品質を制御すること"
+    },
+    {
+      "term": "BE",
+      "definition": "特別な優先を与えない扱い"
+    },
+    {
+      "term": "shaper",
+      "definition": "送出レートを調整する処理"
+    },
+    {
+      "term": "policer",
+      "definition": "許容量を超えた通信へ処置する処理"
+    },
+    {
+      "term": "offered load",
+      "definition": "入力へ提供された通信量。回線から実際に出た量とは区別する"
+    },
+    {
+      "term": "FIFO",
+      "definition": "先に入ったものから順に処理する方式"
+    },
+    {
+      "term": "RTP",
+      "definition": "音声等のパケット媒体通信に用いるプロトコル"
+    },
+    {
+      "term": "損失率",
+      "definition": "送出されたものに対し受信しなかった割合"
+    },
+    {
+      "term": "受信間隔変動",
+      "definition": "本事件では受信間隔と送信間隔の差の絶対値の最大。一般のRFC jitter定義とは分ける"
+    },
+    {
+      "term": "ECN",
+      "definition": "IPヘッダのDSフィールド下位2ビットを使う混雑通知。本件では0で不変"
+    }
+  ],
+  "solution": {
+    "scopeId": "S1",
+    "causeId": "H1",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E03"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E04"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E03"
+          ],
+          [
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E04",
+          "E05"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E02",
+            "E08"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E06"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "R1",
+    "preventionId": "P1",
+    "verificationId": "V1",
+    "criticalOptionIds": [
+      "R2"
+    ],
+    "causalChain": [
+      {
+        "text": "品質と境界の要件：認定M1のDSCP46をGi1で保持し、素材側Gi2は0に整形します。同時素材30Mbit/sでも本件の音声受信間隔変動最大40ms以下、損失1%未満を満たす条件です。映像や逆方向は判定外です（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "本番の負荷比較：素材なしは8ms/0.1%、素材ありは180ms/8%で、端末と音声は同じ2Mbit/sです（E02）。素材の30Mbit/sはWAN手前の提供量で、音声を合わせ32Mbit/s。回線から30Mbit/s出たという記録ではありません。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      {
+        "text": "境界前後のマーク：1秒/250byte/1000ppsの同じM1音声1000packetはGi1入場前46、SW-E送出後0へ変わります（E03）。有効Gi1はreset0で保持例外なし、Gi24は追加書換なしです（E04）。本番端末が最初から46を付けていなかった説明とは異なります。",
+        "evidenceIds": [
+          "E03",
+          "E04"
+        ]
+      },
+      {
+        "text": "分類と混雑：WANは46だけVOICE、他はBEとする全規則です（E05）。観測音声の後0はBE条件に当たり、統計でも音声BE、VOICE音声0/policer0（E06）。32が20を超えると有限FIFOで素材と競合し、音声損失8%が観測されます。p95キュー遅延150msと最大間隔変動180msは別指標です。",
+        "evidenceIds": [
+          "E05",
+          "E06"
+        ]
+      },
+      {
+        "text": "対照と修復計画：同じ素材条件でWANへ46/2Mbit/sを入れた人工対照は10ms/0.2%、素材BE平均18Mbit/sです（E08）。VOICE方式の対照であり、本番修復後ではありません。記録を保存し、Gi1の認定保持だけ戻し、Gi2のDSCP0書換とVOICE上限を維持します（E01/E03/E04）。全通信46への書換は境界と優先枠を壊します。",
+        "evidenceIds": [
+          "E08",
+          "E01",
+          "E03",
+          "E04"
+        ]
+      },
+      {
+        "text": "確認と再発防止：実施後は本番M1の46保持/VOICE分類、素材同時30時の品質基準、素材BEと認定外Gi2のDSCP0書換を確認します。人工対照の過去値や素材を止めた成功だけで完了としません。ポート例外の差分と実マーク、同時業務品質を受入へ含めます（E09）。QoSで回線20が32へ増えるわけではなく、映像/逆方向の未観測品質も断定しません。",
+        "evidenceIds": [
+          "E09"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H2": {
+        "text": "E03P1は46",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "H3": {
+        "text": "E01/E02/E06はVOICE分類0/policer0",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E06"
+        ]
+      },
+      "H4": {
+        "text": "E07全区間CRC0",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H5": {
+        "text": "E07負荷/遅延とE08対照、キュー位置を無視",
+        "evidenceIds": [
+          "E07",
+          "E08"
+        ]
+      },
+      "H1": {
+        "text": "E03/E04/E05/E06",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E05",
+          "E06"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S1": {
+        "text": "E02/E06",
+        "evidenceIds": [
+          "E02",
+          "E06"
+        ]
+      },
+      "S2": {
+        "text": "素材は送出、E02無負荷音声は正常",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "S3": {
+        "text": "今回対象/観測外、断定しない（E01）",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "S4": {
+        "text": "E10と測定音声は別",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "H1": {
+        "text": "E03/E04/E05/E06",
+        "evidenceIds": [
+          "E03",
+          "E04",
+          "E05",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E03P1は46",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "H3": {
+        "text": "E01/E02/E06はVOICE分類0/policer0",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E06"
+        ]
+      },
+      "H4": {
+        "text": "E07全区間CRC0",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H5": {
+        "text": "E07負荷/遅延とE08対照、キュー位置を無視",
+        "evidenceIds": [
+          "E07",
+          "E08"
+        ]
+      },
+      "R1": {
+        "text": "E01/E03/E04",
+        "evidenceIds": [
+          "E01",
+          "E03",
+          "E04"
+        ]
+      },
+      "R2": {
+        "text": "E01信頼境界/優先枠を壊す",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "R3": {
+        "text": "一時緩和にはなるがE01同時業務/マーク要件未修復",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "R4": {
+        "text": "E07正常、境界設定残る",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "P1": {
+        "text": "E01/E03/E09",
+        "evidenceIds": [
+          "E01",
+          "E03",
+          "E09"
+        ]
+      },
+      "P2": {
+        "text": "E02/E09で見逃す",
+        "evidenceIds": [
+          "E02",
+          "E09"
+        ]
+      },
+      "P3": {
+        "text": "E03境界変化未確認",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "P4": {
+        "text": "容量拡張は有効な別策だが認定マーク要件と誤分類を検知しない（E01/E05）",
+        "evidenceIds": [
+          "E01",
+          "E05"
+        ]
+      },
+      "V1": {
+        "text": "E01/E02/E03/E06/E08",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E03",
+          "E06",
+          "E08"
+        ]
+      },
+      "V2": {
+        "text": "実パケットと受信品質未確認（E03/E02）",
+        "evidenceIds": [
+          "E03",
+          "E02"
+        ]
+      },
+      "V3": {
+        "text": "E01同時条件を満たさない",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "V4": {
+        "text": "E08はM1を通していない",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "C1": {
+        "text": "同じpacketの実測比較はE03で10点。設定E04だけは補助5点",
+        "evidenceIds": [
+          "E03",
+          "E04"
+        ]
+      },
+      "C2": {
+        "text": "分類規則は既知。E03の実マーク0又はE06の実分類BE/VOICE0で10点。E06から具体値0自体を断定しない。設定規則だけは補助5点",
+        "evidenceIds": [
+          "E03",
+          "E06"
+        ]
+      },
+      "C3": {
+        "text": "本番/対照の品質を二つの測定で結ぶ。キュー統計だけは補助5点",
+        "evidenceIds": []
+      },
+      "W1": {
+        "text": "E08は音声2と素材18で容量20、損失0.2%。誤主張0点",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "W2": {
+        "text": "E06はVOICE音声0/policer0、誤主張0点",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "W3": {
+        "text": "E02で本番の品質差、E08で対照の基準内を確認できる。誤主張0点",
+        "evidenceIds": [
+          "E02",
+          "E08"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "同時業務品質、認定保持と認定外整形、方向と測定単位の要件。",
+      "E02": "同じ本番条件の素材なし/あり比較。C3本番品質側。offered loadと回線送出を区別。",
+      "E03": "1秒/1000 packet/IP総長250byte/1000pps/2Mbps/MTU1500非断片化の同一flow前46後0。C1単独、C2単独満点。全1分へ外挿しない。",
+      "E04": "Gi1/Gi2のreset0と上書きなし。C1/C2補助。Gi2の処理はDSCP0書換でレートshapingではない。",
+      "E05": "既知の分類全規則と有効キュー。C2補助。公開規則の再添付を必須にしない。",
+      "E06": "1分の音声BE/VOICE0と混雑/損失。C2単独満点、C3補助。BE実分類からDSCP具体値0だけを断定しない。VOICE上限超過やCRC原因説もこの事実と対照で反証。",
+      "E07": "物理/端末/受信正常、損失位置。CRC/CPU原因説の反証。追加dropを断定する範囲に注意。",
+      "E08": "DSCP46をWAN入力へ与えた人工対照の品質。C3対照側。本番M1の修復後ではない。",
+      "E09": "Gi1例外未継承と素材なし受入の履歴。善悪や作業者の性格を推測しない。",
+      "E10": "ポスター差替えの別件。画像の色や画素数を音声障害原因にせず、矛盾証拠として罰しない。"
+    }
+  }
+}

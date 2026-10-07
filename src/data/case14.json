@@ -1,0 +1,894 @@
+{
+  "schemaVersion": 1,
+  "id": "case14",
+  "revision": 1,
+  "title": "届かない開演ベル",
+  "type": "network",
+  "difficulty": 3,
+  "estimatedMinutes": 30,
+  "prerequisites": [
+    "IP・経路・ネットワーク機器の概要（用語辞典で確認できます）"
+  ],
+  "brief": "市民演奏会の受付から、舞台連絡Webの調査を頼まれた。予定ページは読めるのに、開演の変更を伝えるベルが届かない。受付の小坂は客席への案内を揃えたいが、画面を見ていたから大丈夫とは言えずにいる。運用担当の蓮見は公開入口を通した連絡を戻し、内部サービスを直接外へ出す応急対応は避けたい。予定の確認とベルのイベント受信は、同じサイトでも別の受入条件だ。TLSと認証、内部の非公開境界を守りながら、どの段階で接続が止まるかを調べてほしい。設定を変える前の通信と有効設定、比較診断は揃っている。記録を保全し、機能を使えるようにする修復手順と、受付からの確認計画を報告する。",
+  "context": {
+    "baseline": [
+      "予定ページhttps://cue.music.example/ は通常HTTPS。開演ベルは同一originのwss://cue.music.example/live を使い、接続時にHTTP/1.1 Upgradeを行い101後にイベントを受信する。ブラウザ/入口/バックエンドともこの事件ではHTTP/1.1、HTTP/2/3 WebSocketは使わない。入口リバースプロキシRPでTLSを終端し、内部APP10.80.2.20:8080へ平文HTTP/1.1を中継。外部からAPP直結は禁止、RP以外のFW/WAF/中継なし。"
+    ],
+    "assumptions": [
+      "RPは架空製品。普通の中継ではConnection/Upgrade等のhop-by-hopヘッダを削除。/live専用ws_bridge=true時は検証済み切替要求をバックエンド用に再構成して送り、APP101後にトンネルへ切替。false時はConnection: close、UpgradeなしでHTTPを中継する。これは製品の公開仕様で、普通のHTTPならhop-by-hop削除は正しい。APPは/liveで認証済みかつ完全なUpgrade要求なら101、不足時426/Upgrade:websocket、認証失敗401。ヘッダ名は大文字小文字不問。正常要件はws_bridge=trueで機能を維持し、TLS/認証/内部境界を維持する。",
+      "外部PC-W→RP public203.0.113.40:443はHTTPS/WSSで、暗号区間はRPで終端する。外部PC/RP/DNSのIPは抽象化した外部区間の識別値で、外部prefixは設定されていない。RP inside10.80.2.10/24→APP10.80.2.20/24:8080は平文HTTP/1.1、管理RP10.80.9.10/24と保守PC10.80.9.30/24は別の管理網。保守PC→L3→APP8080は許可された診断経路で、公開入口とは別。DNSはPC-W→203.0.113.53 UDP/TCP53の横枝。P1はRPのTLS復号後、P2はRP→APP、P3は管理診断のAPP。凡例は実線が物理、矢印がアプリ要求方向、点線が管理診断。外部からAPP直結は公開要件で禁止されている。",
+      "全資料は2026-10-07T10:30:00+09:00に取得・整理済みで、調査開始時から任意順に閲覧できる。機器は同期済み。本文の未指定日付は2026-10-07、時刻はJST。observedAtは状態又は収録終端以後の観測時刻で、取得とは分ける。前日資料は2026-10-06を明記。diagnosticも設定変更前の固定記録で、欠落なしは各資料の明記範囲だけに限る。"
+    ],
+    "snapshotTime": "2026-10-07T10:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "client",
+        "label": "受付PC-W",
+        "kind": "client",
+        "addresses": [
+          "198.51.100.18、外部NIC"
+        ]
+      },
+      {
+        "id": "dns",
+        "label": "公開DNS",
+        "kind": "service",
+        "addresses": [
+          "203.0.113.53 UDP/TCP53"
+        ]
+      },
+      {
+        "id": "rp",
+        "label": "入口RP",
+        "kind": "service",
+        "addresses": [
+          "public203.0.113.40:443、inside10.80.2.10/24、管理10.80.9.10/24"
+        ]
+      },
+      {
+        "id": "app",
+        "label": "連絡APP",
+        "kind": "service",
+        "addresses": [
+          "10.80.2.20/24 TCP8080、default10.80.2.1"
+        ]
+      },
+      {
+        "id": "router",
+        "label": "内部L3",
+        "kind": "router",
+        "addresses": [
+          "10.80.2.1、10.80.9.1"
+        ]
+      },
+      {
+        "id": "ops",
+        "label": "保守PC",
+        "kind": "client",
+        "addresses": [
+          "10.80.9.30/24→L3、許可された診断用APP8080"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_PUBLIC",
+        "from": "client",
+        "to": "rp",
+        "label": "外部受付→公開RP、HTTPS/WSS・TCP443、TLS終端"
+      },
+      {
+        "id": "L_DNS",
+        "from": "client",
+        "to": "dns",
+        "label": "外部受付→公開DNS、UDP/TCP53"
+      },
+      {
+        "id": "L_APP",
+        "from": "rp",
+        "to": "app",
+        "label": "RP inside→APP、平文HTTP/1.1・TCP8080"
+      },
+      {
+        "id": "L_MANAGEMENT",
+        "from": "rp",
+        "to": "router",
+        "label": "RP管理IF→L3管理網、10.80.9.0/24"
+      },
+      {
+        "id": "L_OPS",
+        "from": "ops",
+        "to": "router",
+        "label": "保守PC→L3管理網、許可された診断の要求方向"
+      },
+      {
+        "id": "L_DIAGNOSTIC",
+        "from": "router",
+        "to": "app",
+        "label": "L3内部IF→APP、10.80.2.0/24・診断TCP8080"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "サービス契約",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "舞台連絡サービス受入仕様",
+      "nodeIds": [
+        "client",
+        "rp",
+        "app"
+      ],
+      "observedAt": "2026-10-06T17:30:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-06 17:30:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "2026-10-06 17:30版。/は予定確認HTTPS200、/liveはHTTP/1.1 Upgrade→101→openイベント。TLSは入口終端、外部はRP443だけ、内部8080非公開。/liveの認証を維持。/が200でもベルの受入に代えない。ws_bridge仕様は上述どおり公開、正しいws要求をAPPへ再構成する。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "受付PCから入口まで",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "PC-Wブラウザ診断",
+      "nodeIds": [
+        "client",
+        "rp"
+      ],
+      "observedAt": "2026-10-07T10:00:02+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:02 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00:00 TLS接続203.0.113.40:443、SNIcue.music.example、証明書ホスト一致/期限内/検証PASS。HTTP/1.1 GET /live（trace r-live-1）：Host cue.music.example、Origin: https://cue.music.example、Connection: Upgrade、Upgrade: websocket、Sec-WebSocket-Version:13、Sec-WebSocket-Key:MTIzNDU2Nzg5MGFiY2RlZg==、認証Cookieは表示用token-tag=U17（値を掲載しない）。10:00:02応答HTTP426/Upgrade:websocket、WebSocket接続不成立。採取はこの往復全件、欠落0。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "APP到着の要求",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P2 APP受信トレース",
+      "nodeIds": [
+        "rp",
+        "app"
+      ],
+      "observedAt": "2026-10-07T10:00:02+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:02 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00:01 trace r-live-1、peer10.80.2.10→10.80.2.20:8080、GET /live HTTP/1.1、Host cue.music.example、Origin: https://cue.music.example、Connection: close、Upgradeヘッダなし、Sec-WebSocket-Version:13、KeyはE02と同じ、token-tag U17=認証成功。APP判定「Upgrade要求条件不足」、426/Upgrade:websocketを10:00:02返却。ログは要求ヘッダ全項目のうち認証秘密値だけ非表示、対象trace欠落0。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "RP有効プロファイル",
+      "kind": "config",
+      "acquisition": "document",
+      "source": "RP running-route export",
+      "nodeIds": [
+        "rp",
+        "app"
+      ],
+      "observedAt": "2026-10-07T10:03:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:03:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:03 route /live→10.80.2.20:8080、upstream_http=1.1、ws_bridge=false、plain_forward strips hop-by-hop、Connection output=close。route /→同じAPP:8080、plain_forward。TLS/host/認証引継ぎは変更なし。全route2件、/liveは長いパス優先でこの設定に一致、別route/上書きなし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "対応する中継ログ",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "RP front/back access log",
+      "nodeIds": [
+        "client",
+        "rp",
+        "app"
+      ],
+      "observedAt": "2026-10-07T10:00:02+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:02 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00:00–02 trace r-live-1 frontstatus426、upstreamstatus426、upstream10.80.2.20:8080、connect4ms、response9ms、route=/live。RP自身の403/502/504生成なし。ログはヘッダを記録しないため、これだけで切替ヘッダの存在は判断できない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "内部APPの対照試験",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P3 保守PCからAPP診断",
+      "nodeIds": [
+        "ops",
+        "router",
+        "app"
+      ],
+      "observedAt": "2026-10-07T10:05:02+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:02 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:05:00同じAPP10.80.2.20:8080、同じHost/path/token-tag U17で完全なHTTP/1.1 Upgrade要求を送信。APP認証PASS、10:05:01 HTTP101/Connection:Upgrade/Upgrade:websocket、Sec-WebSocket-AcceptのKeyとの検証PASS。10:05:02 event=open受信。管理PCからの許可された比較診断で、RP設定は変更していない。これは外部受付の修復後成功ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "通常ページ",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "PC-W予定ページ比較",
+      "nodeIds": [
+        "client",
+        "rp",
+        "app"
+      ],
+      "observedAt": "2026-10-07T10:01:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:01:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:01同じ203.0.113.40:443、同一TLS条件/認証でGET / HTTP/1.1→RP→APP、200。予定version rehearsal-17。通常ページの本文取得は9ms。/liveのプロトコル切替を行っていない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "DNS・接続・負荷",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "受付DNS照会/ネットワーク状態",
+      "nodeIds": [
+        "client",
+        "dns",
+        "rp",
+        "app"
+      ],
+      "observedAt": "2026-10-07T10:06:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:06:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:06 A cue.music.example=203.0.113.40（承認台帳一致）、AAAAなし。RP→APP8080はTCP接続成功。09:55–10:06 link flap/CRC0、RP CPU14%/接続上限10000中32、APP CPU21%/接続上限5000中14。ネットワーク損失記録0。TLS検証を省いた診断ではない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "更新履歴",
+      "kind": "log",
+      "acquisition": "document",
+      "source": "RPプロファイル更新票",
+      "nodeIds": [
+        "rp"
+      ],
+      "observedAt": "2026-10-07T09:40:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:40:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:40 route /liveプロファイルlive_tunnel(ws_bridge=true)→standard_http(false)。目的欄「共通化」。/通常ページ200だけ受入、イベント受信欄未記入。APP更新なし、DNS/証明書更新なし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "ベルの文言",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "受付画面の案内版",
+      "nodeIds": [
+        "app"
+      ],
+      "observedAt": "2026-10-07T09:10:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:10:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:10「間もなく開演」を「まもなく開演」に表記変更。イベントの文字列だけで、接続先・通信方式・routeは変更対象外。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H5",
+      "label": "APPがWebSocket未実装",
+      "description": "APPがWebSocketを未実装で、完全な認証済み要求を受けても101やイベントを返せなかった"
+    },
+    {
+      "id": "H1",
+      "label": "live専用中継の無効化",
+      "description": "/liveのws_bridgeが無効となり、APP向けのUpgradeが通常中継で削られて切替できなくなった"
+    },
+    {
+      "id": "H2",
+      "label": "入口証明書の期限切れ",
+      "description": "入口証明書の期限切れでTLS検証が失敗し、受付はベルのHTTP要求を送れなくなった"
+    },
+    {
+      "id": "H3",
+      "label": "DNSが旧入口を返す",
+      "description": "DNSが旧入口を返し、受付は承認された公開RPとは別の接続先へベルを要求した"
+    },
+    {
+      "id": "H4",
+      "label": "APPが認証で401拒否",
+      "description": "APPが受付の認証を拒否し、切替要求を保持したまま401でベルへの接続を断った"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S4",
+        "label": "TLS接続のみ",
+        "description": "TLS接続だけを対象とし、HTTP要求の中継やベルのプロトコル切替は正常として扱う"
+      },
+      {
+        "id": "S1",
+        "label": "公開入口のlive接続",
+        "description": "公開入口RPを経由する/liveのイベント接続を対象とし、通常ページと内部対照の成功とは分けて扱う"
+      },
+      {
+        "id": "S2",
+        "label": "サイトの全ページ",
+        "description": "サイトの全ページを対象とし、通常ページとベルを含むWebサービス全体の停止として扱う"
+      },
+      {
+        "id": "S3",
+        "label": "APPの全WebSocket機能",
+        "description": "APPの全WebSocket機能を対象とし、外部受付と内部保守の接続が共通して停止したと扱う"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H5",
+        "label": "APPがWebSocket未実装",
+        "description": "APPがWebSocketを未実装で、完全な認証済み要求を受けても101やイベントを返せなかった"
+      },
+      {
+        "id": "H1",
+        "label": "live専用中継の無効化",
+        "description": "/liveのws_bridgeが無効となり、APP向けのUpgradeが通常中継で削られて切替できなくなった"
+      },
+      {
+        "id": "H2",
+        "label": "入口証明書の期限切れ",
+        "description": "入口証明書の期限切れでTLS検証が失敗し、受付はベルのHTTP要求を送れなくなった"
+      },
+      {
+        "id": "H3",
+        "label": "DNSが旧入口を返す",
+        "description": "DNSが旧入口を返し、受付は承認された公開RPとは別の接続先へベルを要求した"
+      },
+      {
+        "id": "H4",
+        "label": "APPが認証で401拒否",
+        "description": "APPが受付の認証を拒否し、切替要求を保持したまま401でベルへの接続を断った"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "W3",
+        "label": "通常HTTPだけでベル成功",
+        "description": "通常ページと内部/live対照は共に200を返し、ベルも通常HTTPだけで成功している",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C3",
+        "label": "内部対照と有効route",
+        "description": "内部対照は101後のイベント受信まで成功し、有効/live routeは普通の中継でヘッダを削る",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C1",
+        "label": "TLS成功後のHTTP426",
+        "description": "受付の/liveはTLS検証に成功した後、HTTP426で切替不成立となる",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "W1",
+        "label": "TLS失敗と要求未到達",
+        "description": "受付のTLS検証は失敗し、HTTP要求は入口へ到達していない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C2",
+        "label": "入口とAPPの要求差",
+        "description": "受付で送ったUpgrade要求は、対応するAPP受信時に失われConnectionもcloseになる",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W2",
+        "label": "Upgrade保持と認証拒否",
+        "description": "受付のUpgradeはAPPまで保持され、認証によりAPPが401で拒否している",
+        "requiredEvidenceCount": 2
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R3",
+        "label": "DNSの入口応答を更新",
+        "description": "記録・設定を保存し、DNSの入口応答を更新して受付に再照会させ、/liveの中継プロファイルを維持する"
+      },
+      {
+        "id": "R4",
+        "label": "APP8080を外部公開",
+        "description": "記録・設定を保存し、APP8080を外部へ公開して受付がRPを迂回できるようにし、内部APPの処理を維持する"
+      },
+      {
+        "id": "R1",
+        "label": "専用ws_bridgeを有効化",
+        "description": "記録・設定を保存し、/liveの専用ws_bridgeを有効にして、TLS・認証・内部8080非公開を維持する"
+      },
+      {
+        "id": "R2",
+        "label": "証明書検証を無効化",
+        "description": "記録・設定を保存し、受付の証明書検証を無効にして接続を継続し、中継プロファイルと認証を維持する"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P4",
+        "label": "ベル文言を短縮して受入",
+        "description": "ベル文言を短縮して画面表示を受入し、その文字列の確認を接続の判定として、routeとTLS設定を維持する"
+      },
+      {
+        "id": "P1",
+        "label": "切替後イベントまで受入",
+        "description": "routeごとに通常ページと認証済みUpgrade101後のイベント受信を受入し、TLSと非公開境界を維持する"
+      },
+      {
+        "id": "P2",
+        "label": "通常ページ200だけを受入",
+        "description": "routeごとに通常ページ200を受入し、その成功をベルも使える判定として、TLSと非公開境界を維持する"
+      },
+      {
+        "id": "P3",
+        "label": "全routeのヘッダを無条件転送",
+        "description": "全routeでhop-by-hopヘッダを無条件に転送し、ヘッダ保持を共通受入として、公開口と認証を維持する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V1",
+        "label": "外部の切替とイベントを確認",
+        "description": "外部受付からTLS・認証付き/liveの101とイベント受信を確認し、通常ページと内部非公開も確かめる"
+      },
+      {
+        "id": "V2",
+        "label": "内部対照で外部復旧を判定",
+        "description": "内部保守PCからAPPの101とイベント受信を確認し、その対照を外部復旧判定にして、受付側の追加試験は省略する"
+      },
+      {
+        "id": "V3",
+        "label": "443のTCP成立で判定",
+        "description": "外部受付から443へのTCP接続を確認し、その成立をベルの復旧判定にして、切替とイベントの追加試験は省略する"
+      },
+      {
+        "id": "V4",
+        "label": "HTTP426の受信で判定",
+        "description": "外部受付からHTTP426の受信を確認し、HTTP応答の存在をベルの復旧判定にして、101とイベントの追加試験は省略する"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "同じサイトでも機能の通信方式を分ける。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "入口とAPPで同じtraceの要求ヘッダ・応答を比べる。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "TLS成功後の426と、内部対照の101の差を/live有効プロファイルまで追う。",
+      "evidenceIds": []
+    }
+  ],
+  "glossary": [
+    {
+      "term": "WSS",
+      "definition": "TLS上でWebSocketを使う通信"
+    },
+    {
+      "term": "Upgrade",
+      "definition": "HTTP/1.1で接続のプロトコル切替を求める仕組み"
+    },
+    {
+      "term": "101",
+      "definition": "Switching Protocols。プロトコル切替を示すHTTP応答"
+    },
+    {
+      "term": "426",
+      "definition": "切替要求が必要であることを示す応答。本APPの条件は公開仕様による"
+    },
+    {
+      "term": "hop-by-hop",
+      "definition": "その接続単位に適用するヘッダ"
+    },
+    {
+      "term": "リバースプロキシ",
+      "definition": "入口で受けた要求を内部サービスへ中継する機器"
+    },
+    {
+      "term": "TLS終端",
+      "definition": "TLSで保護した区間が終わる地点"
+    },
+    {
+      "term": "traceID",
+      "definition": "同じ要求の対応を調べるための識別子"
+    },
+    {
+      "term": "origin",
+      "definition": "スキーム・ホスト・ポートで表すWebの出所"
+    },
+    {
+      "term": "Cookie",
+      "definition": "HTTP要求に含める状態情報。認証秘密値を不用意に共有しない"
+    }
+  ],
+  "solution": {
+    "scopeId": "S1",
+    "causeId": "H1",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E02",
+            "E03"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E05"
+        ],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E04",
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E09"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "R1",
+    "preventionId": "P1",
+    "verificationId": "V1",
+    "criticalOptionIds": [
+      "R2",
+      "R4"
+    ],
+    "causalChain": [
+      {
+        "text": "業務条件：通常ページは200、ベルはHTTP/1.1の切替後にイベントを受け取る別条件です。内部8080は非公開、TLSと認証を維持します（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "受付から入口：PC-Wは正しい入口へTLSを検証して接続し、完全なUpgrade要求を送っています。その後426が返り、ベル接続は成立していません（E02）。TLS以前の停止ではありません。",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      {
+        "text": "APPへ届いた内容：同じr-live-1はAPPでConnection: close、Upgradeなしとなり、認証は成功しています。APPは切替条件不足で426を返しました（E03）。RPの応答ログもAPPの426との対応を示します（E05）。",
+        "evidenceIds": [
+          "E03",
+          "E05"
+        ]
+      },
+      {
+        "text": "有効設定と能力：/liveの有効ws_bridgeはfalseで、通常中継としてhop-by-hopを削る設定です（E04）。内部対照は実測で101後のopenイベント受信まで成功しています（E06）。普通のHTTPのヘッダ削除を誤実装と一般化せず、専用機能の設定不一致と判断します。",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      {
+        "text": "修復計画：記録と設定を保存し、/liveだけ専用ws_bridgeを有効にする計画です。TLS/認証と内部非公開は維持します（E01/E03/E04）。証明書検証無効化やAPPの外部公開で迂回する対応は防護条件を壊します。",
+        "evidenceIds": [
+          "E01",
+          "E03",
+          "E04"
+        ]
+      },
+      {
+        "text": "確認と再発防止：外部受付からTLSと認証付き/liveで101後のイベント受信を確かめ、通常ページと内部非公開も確認します。保守診断の過去の101を外部復旧成功と扱いません（E06/E07）。routeごとに機能の受入を分け、通常200だけで終わらせない運用にします（E09）。",
+        "evidenceIds": [
+          "E06",
+          "E07",
+          "E09"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H5": {
+        "text": "E06同一APP101/open。",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "H1": {
+        "text": "E02/E03/E04",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E04"
+        ]
+      },
+      "H2": {
+        "text": "E02検証PASS",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "H3": {
+        "text": "E08一致/E02正しい入口",
+        "evidenceIds": [
+          "E08",
+          "E02"
+        ]
+      },
+      "H4": {
+        "text": "E03U17認証成功、401でなく426",
+        "evidenceIds": [
+          "E03"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S1": {
+        "text": "E02/E06/E07",
+        "evidenceIds": [
+          "E02",
+          "E06",
+          "E07"
+        ]
+      },
+      "S2": {
+        "text": "E07正常",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "S3": {
+        "text": "E06正常",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "S4": {
+        "text": "E02TLS成功後のHTTP応答",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "H1": {
+        "text": "E02/E03/E04",
+        "evidenceIds": [
+          "E02",
+          "E03",
+          "E04"
+        ]
+      },
+      "H2": {
+        "text": "E02検証PASS",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "H3": {
+        "text": "E08一致/E02正しい入口",
+        "evidenceIds": [
+          "E08",
+          "E02"
+        ]
+      },
+      "H4": {
+        "text": "E03U17認証成功、401でなく426",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      "H5": {
+        "text": "E06同一APP101/open。",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "R1": {
+        "text": "E01/E03/E04",
+        "evidenceIds": [
+          "E01",
+          "E03",
+          "E04"
+        ]
+      },
+      "R2": {
+        "text": "E02正常、防護を壊す",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "R3": {
+        "text": "E08正常",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "R4": {
+        "text": "E01内部非公開を壊す",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "P1": {
+        "text": "E01/E09",
+        "evidenceIds": [
+          "E01",
+          "E09"
+        ]
+      },
+      "P2": {
+        "text": "E07で見逃す",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "P3": {
+        "text": "中継の正規処理を外す、/liveの条件付き再構成が必要（E01/E04）",
+        "evidenceIds": [
+          "E01",
+          "E04"
+        ]
+      },
+      "P4": {
+        "text": "E10内容と切替は別",
+        "evidenceIds": [
+          "E10"
+        ]
+      },
+      "V1": {
+        "text": "E01/E02/E06/E07",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E06",
+          "E07"
+        ]
+      },
+      "V2": {
+        "text": "E06はRPを通らない",
+        "evidenceIds": [
+          "E06"
+        ]
+      },
+      "V3": {
+        "text": "切替/イベント未検証（E01/E02）",
+        "evidenceIds": [
+          "E01",
+          "E02"
+        ]
+      },
+      "V4": {
+        "text": "E01の業務条件不成立",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "C1": {
+        "text": "同一試行のTLSとHTTP応答がE02にあり10点",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "C2": {
+        "text": "入口前とAPP受信をtraceで対応。E05はヘッダなしの相関補助5点",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "C3": {
+        "text": "公開仕様だけでなく実測した内部101/openはE06、有効routeはE04。変更票だけは補助5点",
+        "evidenceIds": [
+          "E06",
+          "E04"
+        ]
+      },
+      "W1": {
+        "text": "E02のTLS PASSとHTTP426で反証。誤主張0点",
+        "evidenceIds": [
+          "E02"
+        ]
+      },
+      "W2": {
+        "text": "E02/E03で前後を照合するとAPPにはUpgradeなし、認証成功で426。誤主張0点",
+        "evidenceIds": [
+          "E02",
+          "E03"
+        ]
+      },
+      "W3": {
+        "text": "E07通常200とE06切替101/openは別方式。誤った組合せなので0点",
+        "evidenceIds": [
+          "E07",
+          "E06"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "受入方式と境界、製品仕様。通常200だけの確認を反証する正常要件。",
+      "E02": "同じ外部試行のTLS PASS、完全要求（Originを含む）、426。C1単独、C2送出側。",
+      "E03": "対応traceのAPP受信（Origin保持/Upgradeなし/Connection close）、認証成功と426。C2受信側。残ったSec-WebSocketヘッダだけでは完全要求にならない。",
+      "E04": "有効routeと専用中継false、上書きなし。C3設定側。",
+      "E05": "front/back応答対応と短時間接続。C2補助。ヘッダ内容の証明はない。",
+      "E06": "同じAPPの内部実測101/open。C3実測成功側。公開仕様の能力説明とは分け、外部修復後成功には転用しない。",
+      "E07": "通常ページの正常対照。全サイト停止を反証し、イベント成功へ広げない。",
+      "E08": "DNS/リンク/接続/負荷の正常対照。旧入口/負荷等の説明を反証。",
+      "E09": "中継更新と受入範囲の履歴。C3補助。更新の正しい意図を推測せず、履歴だけで現行値や実測成功を代替しない。",
+      "E10": "ベル文言の別件。短い文字にすることはUpgrade不成立を解消せず、公開カードではその結論を先出ししない。"
+    }
+  }
+}

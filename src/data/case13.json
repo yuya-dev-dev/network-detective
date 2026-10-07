@@ -1,0 +1,912 @@
+{
+  "schemaVersion": 1,
+  "id": "case13",
+  "revision": 1,
+  "title": "点灯したままの通路",
+  "type": "network",
+  "difficulty": 2,
+  "estimatedMinutes": 25,
+  "prerequisites": [
+    "IP・経路・ネットワーク機器の概要（用語辞典で確認できます）"
+  ],
+  "brief": "劇場の舞台袖から、字幕表示の調査依頼が届いた。新しい系統をつないだリハーサルで、表示機の字幕が進まない。出演者は自分の出番を確認し、客席には聞き取りを補う文字を届けたい。舞台監督の瀬尾は時間を守りたいが、準備ができたと言い切れずにいる。運用担当の岡は、音響管理の通信を続けながら字幕系統を使えるようにしたい。字幕と管理は別VLANで運用し、上流のリンクでは承認された番号だけを通す決まりだ。表示機から配信サーバへのHTTPSと、管理通信の継続が受入条件となる。設定変更前の資料から止まる範囲を絞り、記録を保全して修復手順と確認計画をまとめてほしい。ランプの点灯や一台の成功だけで、準備完了とは判断しないでほしい。",
+  "context": {
+    "baseline": [
+      "字幕VLAN42=10.42.0.0/24、表示D1=.21・D2=.22、GW=.1。字幕配信server10.50.0.20/TCP443、管理端末10.30.0.10/24（VLAN30）。D1/D2は承認済み固定IP。新設edgeSWのaccess1/2はVLAN42、access3の管理はVLAN30。edge Gi24↔core Gi5は802.1Q trunk、承認allowed=30,42、native=999で一致。字幕と管理を分離し、他VLANを通さない。L3はcoreのSVI42 .1とSVI30 .1、Gi6でserverLAN .50.1へ接続。DNSを介さない固定IPによる調査対象HTTPS。別経路/無線なし、port-channelなし、STPは許可/存在VLANでforwarding、loopなし。"
+    ],
+    "assumptions": [
+      "架空SWはtrunk ingressでallowed外タグを破棄し、vlan-not-allowedカウンタに計上。SPAN P2はこの入場判定後のCPU側、P1はedge uplinkの送出側。タグの着いたユーザ通信は物理link upでも通らない場合がある。coreのSVI42はautostate無効で、VLAN42の有効L2ポートがなくても論理IFをupに保つ製品仕様。SVIからの自己診断はcore自身が送信元10.42.0.1として行い、字幕端末の経路を通らない。",
+      "字幕D1/D2→袖SW Gi1/Gi2はaccess VLAN42、管理PC→Gi3はaccess VLAN30。袖SW Gi24↔core Gi5の物理リンクはtrunk、native999、承認allowed30,42。core Gi7は本館確認PCのaccess30、Gi6は10.50.0.1/24の配信サーバ網へ接続する。SVI42は10.42.0.1/24、SVI30は10.30.0.1/24。字幕のGW探索は同じVLAN内、配信TCP443はGWから別網の10.50.0.20へ進む。管理もTCP443だが所属はVLAN30。core SVI42は本製品のautostate無効条件でupを維持する。P1はedge送出側、P2はcoreの入場判定後。凡例は実線が物理、点線矢印がVLANごとの論理経路。",
+      "全資料は2026-10-07T10:30:00+09:00に取得・整理済みで、調査開始時から任意順に閲覧できる。機器は同期済み。本文の未指定日付は2026-10-07、時刻はJST。observedAtは状態又は収録終端以後の観測時刻で、取得とは分ける。前日資料は2026-10-06を明記。diagnosticも設定変更前の固定記録で、欠落なしは各資料の明記範囲だけに限る。"
+    ],
+    "snapshotTime": "2026-10-07T10:30:00+09:00"
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "display1",
+        "label": "字幕D1",
+        "kind": "client",
+        "addresses": [
+          "10.42.0.21/24 GW10.42.0.1→edge Gi1"
+        ]
+      },
+      {
+        "id": "display2",
+        "label": "字幕D2",
+        "kind": "client",
+        "addresses": [
+          "10.42.0.22/24 GW10.42.0.1→edge Gi2"
+        ]
+      },
+      {
+        "id": "mgr",
+        "label": "袖管理",
+        "kind": "client",
+        "addresses": [
+          "10.30.0.10/24 GW10.30.0.1→edge Gi3"
+        ]
+      },
+      {
+        "id": "edge",
+        "label": "袖SW",
+        "kind": "switch",
+        "addresses": [
+          "Gi1/2 access42、Gi3 access30、Gi24 trunk"
+        ]
+      },
+      {
+        "id": "core",
+        "label": "主幹L3",
+        "kind": "router",
+        "addresses": [
+          "Gi5 trunk、SVI42 .42.1、SVI30 .30.1、Gi6 .50.1/24"
+        ]
+      },
+      {
+        "id": "server",
+        "label": "字幕配信",
+        "kind": "service",
+        "addresses": [
+          "10.50.0.20/24 GW10.50.0.1 TCP443"
+        ]
+      },
+      {
+        "id": "desk",
+        "label": "本館確認PC",
+        "kind": "client",
+        "addresses": [
+          "10.30.0.12/24→core Gi7 access30"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "L_D1",
+        "from": "display1",
+        "to": "edge",
+        "label": "D1→Gi1、access VLAN42"
+      },
+      {
+        "id": "L_D2",
+        "from": "display2",
+        "to": "edge",
+        "label": "D2→Gi2、access VLAN42"
+      },
+      {
+        "id": "L_MGR",
+        "from": "mgr",
+        "to": "edge",
+        "label": "管理PC→Gi3、access VLAN30"
+      },
+      {
+        "id": "L_TRUNK",
+        "from": "edge",
+        "to": "core",
+        "label": "Gi24↔Gi5、trunk、native999、承認allowed30,42"
+      },
+      {
+        "id": "L_SERVER",
+        "from": "core",
+        "to": "server",
+        "label": "Gi6・配信サーバ網、TCP443要求と返答"
+      },
+      {
+        "id": "L_DESK",
+        "from": "desk",
+        "to": "core",
+        "label": "本館PC→Gi7、access VLAN30"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "承認配線/VLAN表",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "舞台袖増設設計",
+      "nodeIds": [
+        "edge",
+        "core",
+        "display1",
+        "display2",
+        "mgr"
+      ],
+      "observedAt": "2026-10-06T18:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-06 18:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "2026-10-06 18:00版：Gi1/2 access42、Gi3 access30。edge Gi24/core Gi5 trunk tagged30,42のみ、native999。字幕42と音響管理30を混ぜない。D1 .21/24、D2 .22/24、GW10.42.0.1。DHCPは不使用。字幕server10.50.0.20:443への通信と管理30の継続が受入条件。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "title": "端末とaccessポート実測",
+      "kind": "config",
+      "acquisition": "diagnostic",
+      "source": "D1/D2とedge状態採取",
+      "nodeIds": [
+        "display1",
+        "display2",
+        "edge"
+      ],
+      "observedAt": "2026-10-07T10:00:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:00:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:00 D1=10.42.0.21/24 GW10.42.0.1、D2=.22/24 GW同じ。NIC/link up、固定設定。edge Gi1/2 operational access VLAN42 up、VLAN42 active、MAC D1=02:42:00:00:00:21 learnedGi1、D2=02:42:00:00:00:22 learnedGi2。全端末別名/二重接続なし。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "title": "境界前のARP",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P1 edge uplink送出採取",
+      "nodeIds": [
+        "display1",
+        "edge",
+        "core"
+      ],
+      "observedAt": "2026-10-07T10:02:10+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:02:10 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:02:00–10:02:10 D1から10.50.0.20:443を1回試験。10:02:00/01/03 edge Gi24送出: taggedVID42、srcMAC02:42:00:00:00:21、broadcast ARP who-has10.42.0.1 tell10.42.0.21。coreからのARP reply受信0、D1 TCP SYN0。取得範囲この試験全件、欠落0。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "title": "trunk両端の有効設定",
+      "kind": "config",
+      "acquisition": "document",
+      "source": "edge/core running-config採取",
+      "nodeIds": [
+        "edge",
+        "core"
+      ],
+      "observedAt": "2026-10-07T10:03:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:03:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:03 edge Gi24 mode=trunk allowed=30,42 native999、core Gi5 mode=trunk allowed=30 native999。両方VLAN30,42,999を作成済み。core SVI42=10.42.0.1/24 up（autostate disabled）、SVI30=10.30.0.1/24 up、server直結10.50.0.0/24。STP30/42で対象の許可ポートはforwarding、pruningなし。allowedは追加式ではなく有効集合そのもの。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "title": "字幕LAN内の対照",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "D1→D2のL2疎通",
+      "nodeIds": [
+        "display1",
+        "display2",
+        "edge"
+      ],
+      "observedAt": "2026-10-07T10:04:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:04:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:04 D1 ARP who-has10.42.0.22、D2が02:42:00:00:00:22で応答、ICMP echo4/4成功、最大1ms。D1→D2はedge内VLAN42で完結しtrunkを通らない。IP重複応答なし、MAC学習安定。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "title": "境界後の受入記録",
+      "kind": "log",
+      "acquisition": "diagnostic",
+      "source": "P2とcore Gi5 VLANカウンタ",
+      "nodeIds": [
+        "edge",
+        "core",
+        "display1"
+      ],
+      "observedAt": "2026-10-07T10:02:10+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:02:10 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "E03と同じ10:02:00–10:02:10、core Gi5物理受信VID42 ARP3、vlan-not-allowed42増分3、accepted42増分0。P2のARP who-has10.42.0.1受信0。VID30はaccepted増分18、drop0。カウンタ/採取とも全区間、欠落0、表示は今回試験の差分。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "title": "ケーブルと管理通信",
+      "kind": "test",
+      "acquisition": "diagnostic",
+      "source": "uplink物理と管理HTTPSの診断",
+      "nodeIds": [
+        "edge",
+        "core",
+        "mgr",
+        "server"
+      ],
+      "observedAt": "2026-10-07T10:05:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:05:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:50–10:05 edgeGi24/coreGi5 up 1Gbps full、CRC0、link flap0。10:05管理PC10.30.0.10→同じtrunk VID30→10.50.0.20:443、HTTPS200。物理リンクの緑点灯は09:50以後継続。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "title": "サービスとL3許可",
+      "kind": "config",
+      "acquisition": "diagnostic",
+      "source": "配信server/core経路・ACL照合",
+      "nodeIds": [
+        "desk",
+        "server",
+        "core"
+      ],
+      "observedAt": "2026-10-07T10:06:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 10:06:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "10:06 serverlisten443、字幕ファイル rehearsal.vtt存在、CPU12%、desk→serverHTTPS200。同時点のcore VLAN42→10.50.0.20 TCP443許可、返答許可。全L3拒否カウンタ0、E03の試行はIP段階に達していない。serverGW=10.50.0.1、core自身のSVI42アドレス10.42.0.1を送信元とするserverへのHTTPS200（字幕端末由来の要求ではない）。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "title": "増設作業の記録",
+      "kind": "log",
+      "acquisition": "document",
+      "source": "trunk変更票",
+      "nodeIds": [
+        "edge",
+        "core"
+      ],
+      "observedAt": "2026-10-07T09:45:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:45:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:45 edgeGi24 allowed30,42を登録、coreGi5 allowed30を保存。「管理PCで接続確認」欄だけ完了。VLAN42の同一L2対照とGW経由の受入欄は未記入。更新はこの2ポートだけ、配線追加やループ接続はない。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "title": "字幕原稿の版",
+      "kind": "report",
+      "acquisition": "document",
+      "source": "上演台本版管理",
+      "nodeIds": [
+        "server"
+      ],
+      "observedAt": "2026-10-07T09:30:00+09:00",
+      "observedAtLabel": "資料時刻・2026-10-07 09:30:00 JST",
+      "content": {
+        "blocks": [
+          {
+            "type": "text",
+            "body": "09:30字幕原稿の改行位置を修正。ファイルはHTTPS取得でき、配信URL/ポート/ネットワーク設定は変更していない。"
+          }
+        ]
+      }
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H4",
+      "label": "uplinkケーブルの切断",
+      "description": "uplinkのケーブルが切れ、物理リンクの停止によって字幕と管理の上流通信が失われた"
+    },
+    {
+      "id": "H5",
+      "label": "配信HTTPSの停止",
+      "description": "配信サーバのHTTPSサービスが停止し、字幕端末から届いた接続要求へ応答できなかった"
+    },
+    {
+      "id": "H1",
+      "label": "coreのallowedから42欠落",
+      "description": "core Gi5 trunkのallowedから42が欠落し、字幕のGW探索が入場判定で破棄された"
+    },
+    {
+      "id": "H2",
+      "label": "字幕端末GWの誤設定",
+      "description": "D1のGWアドレスが承認値と違い、字幕が必要な上流へ転送する宛先を見つけられなかった"
+    },
+    {
+      "id": "H3",
+      "label": "字幕端末のVLAN不一致",
+      "description": "D1とD2が異なるaccess VLANに属し、字幕系統内のL2通信ができなくなった"
+    }
+  ],
+  "reportOptions": {
+    "scopeOptions": [
+      {
+        "id": "S3",
+        "label": "配信サービス全体",
+        "description": "配信サーバを使う全利用者を対象とし、字幕端末と本館確認PCを含むサービス停止として扱う"
+      },
+      {
+        "id": "S4",
+        "label": "管理30の通信",
+        "description": "袖SW配下の管理VLAN30を対象とし、字幕VLAN42の上流通信は正常として扱う"
+      },
+      {
+        "id": "S1",
+        "label": "字幕42の上流通信",
+        "description": "袖SW配下VLAN42の別セグメント通信を対象とし、同一SW内の通信や管理30とは分けて扱う"
+      },
+      {
+        "id": "S2",
+        "label": "袖SWの全通信",
+        "description": "袖SW配下の全通信を対象とし、同一SW内の通信と管理30を含む共通停止として扱う"
+      }
+    ],
+    "causeOptions": [
+      {
+        "id": "H4",
+        "label": "uplinkケーブルの切断",
+        "description": "uplinkのケーブルが切れ、物理リンクの停止によって字幕と管理の上流通信が失われた"
+      },
+      {
+        "id": "H5",
+        "label": "配信HTTPSの停止",
+        "description": "配信サーバのHTTPSサービスが停止し、字幕端末から届いた接続要求へ応答できなかった"
+      },
+      {
+        "id": "H1",
+        "label": "coreのallowedから42欠落",
+        "description": "core Gi5 trunkのallowedから42が欠落し、字幕のGW探索が入場判定で破棄された"
+      },
+      {
+        "id": "H2",
+        "label": "字幕端末GWの誤設定",
+        "description": "D1のGWアドレスが承認値と違い、字幕が必要な上流へ転送する宛先を見つけられなかった"
+      },
+      {
+        "id": "H3",
+        "label": "字幕端末のVLAN不一致",
+        "description": "D1とD2が異なるaccess VLANに属し、字幕系統内のL2通信ができなくなった"
+      }
+    ],
+    "claimOptions": [
+      {
+        "id": "W2",
+        "label": "native不一致と999への入場",
+        "description": "trunk両端のnativeが異なり、D1の字幕ARPはVLAN999へ受け入れられている",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "C2",
+        "label": "tag42送出と入場破棄",
+        "description": "D1のGW探索ARPはtag42でuplinkへ送出され、coreの入場判定で落ちた",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W3",
+        "label": "字幕ARPはタグなし",
+        "description": "字幕ARPはタグなしでuplinkに送出され、VID42の送出は記録されていない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C3",
+        "label": "承認と有効allowedの差",
+        "description": "trunkの承認allowed集合とcoreGi5の有効集合は42について一致しない",
+        "requiredEvidenceCount": 1
+      },
+      {
+        "id": "C1",
+        "label": "MAC学習と字幕間通信",
+        "description": "D1/D2のMACは稼働access42のGi1/Gi2に学習され、両端末の実通信も成功した",
+        "requiredEvidenceCount": 2
+      },
+      {
+        "id": "W1",
+        "label": "両端末は管理VLAN30",
+        "description": "D1/D2はVLAN30の設定を使い、字幕VLAN42とは別網として互いに通信している",
+        "requiredEvidenceCount": 2
+      }
+    ],
+    "repairOptions": [
+      {
+        "id": "R2",
+        "label": "GWを配信サーバへ変更",
+        "description": "設定・カウンタ・採取を保全し、D1のGWを配信サーバIPへ変更して、trunkとVLANの設定を維持する"
+      },
+      {
+        "id": "R3",
+        "label": "uplinkケーブルを交換",
+        "description": "設定・カウンタ・採取を保全し、uplinkケーブルを交換して、両端のallowed集合と端末設定を維持する"
+      },
+      {
+        "id": "R4",
+        "label": "全VLAN許可と境界撤去",
+        "description": "設定・カウンタ・採取を保全し、trunkで全VLANを許可して字幕と管理の境界を撤去し、端末IPを維持する"
+      },
+      {
+        "id": "R1",
+        "label": "coreへ42を追加",
+        "description": "設定・カウンタ・採取を保全し、core Gi5に42を追加して30,42を維持し、字幕と管理の分離を保つ"
+      }
+    ],
+    "preventionOptions": [
+      {
+        "id": "P3",
+        "label": "管理30を字幕42の判定に使用",
+        "description": "管理30からの業務通信を受入記録にし、その成功を字幕42の判定にも用いて、現在の端末IPを維持する"
+      },
+      {
+        "id": "P4",
+        "label": "字幕の校正を通信判定に使用",
+        "description": "字幕原稿の文字校正を受入記録にし、表示内容の正しさを上流通信の判定として、ネットワーク設定を維持する"
+      },
+      {
+        "id": "P1",
+        "label": "全VLANの業務通信を受入",
+        "description": "trunk両端と必要な全VLANを照合し、各VLANでGW経由の業務通信を受入として、分離条件を維持する"
+      },
+      {
+        "id": "P2",
+        "label": "link upを受入判定",
+        "description": "trunk両端のlink upを受入記録にし、その継続を字幕と管理の到達性判定として、現在のVLANを維持する"
+      }
+    ],
+    "verificationOptions": [
+      {
+        "id": "V4",
+        "label": "緑ランプだけで判定",
+        "description": "trunk両端の緑ランプとlink upを確認し、その継続を字幕の判定にして、VLAN別の追加試験は省略する"
+      },
+      {
+        "id": "V1",
+        "label": "字幕と管理の業務を確認",
+        "description": "D1/D2からGWのARPと配信TCP443・字幕表示を確認し、同じtrunkの管理30も確認して、分離条件を確かめる"
+      },
+      {
+        "id": "V2",
+        "label": "同一SW内pingだけで判定",
+        "description": "D1からD2のpingとMAC応答を確認し、同一SW内の成功を上流判定にして、配信HTTPSの追加試験は省略する"
+      },
+      {
+        "id": "V3",
+        "label": "本館側の成功で判定",
+        "description": "配信サーバ自己診断と本館PCのHTTPSを確認し、その成功を字幕側の判定にして、袖側の追加試験は省略する"
+      }
+    ]
+  },
+  "hints": [
+    {
+      "id": "hint1",
+      "level": 1,
+      "text": "同じSW内の成功と、上流への成功を分ける。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint2",
+      "level": 2,
+      "text": "物理のupとtrunkで通す番号を別に読む。",
+      "evidenceIds": []
+    },
+    {
+      "id": "hint3",
+      "level": 3,
+      "text": "tag42のARPを送出側と受入側で照合し、有効allowedを承認値と比べる。",
+      "evidenceIds": []
+    }
+  ],
+  "glossary": [
+    {
+      "term": "VLAN",
+      "definition": "L2ネットワークを論理的に分離する仕組み"
+    },
+    {
+      "term": "access",
+      "definition": "端末を一つのVLANに所属させる接続"
+    },
+    {
+      "term": "trunk",
+      "definition": "複数VLANをタグで運ぶ接続"
+    },
+    {
+      "term": "802.1Q",
+      "definition": "VLANを識別するタグの規格"
+    },
+    {
+      "term": "native",
+      "definition": "タグのない通信の扱いを定めるVLAN。本件の42には用いない"
+    },
+    {
+      "term": "SVI",
+      "definition": "VLANに対応するL3インターフェース"
+    },
+    {
+      "term": "STP",
+      "definition": "L2のループを防ぐ仕組み"
+    },
+    {
+      "term": "SPAN",
+      "definition": "指定された地点の通信を複写して観測する機能"
+    },
+    {
+      "term": "CRC",
+      "definition": "フレームに誤りがないか調べる検査"
+    },
+    {
+      "term": "ARP",
+      "definition": "同じL2内でIPv4に対応するMACアドレスを探す仕組み"
+    },
+    {
+      "term": "allowed",
+      "definition": "trunkを通すVLANの集合。本製品は有効集合を表示する"
+    }
+  ],
+  "solution": {
+    "scopeId": "S1",
+    "causeId": "H1",
+    "claimRules": [
+      {
+        "claimId": "C1",
+        "requiredEvidenceSets": [
+          [
+            "E02",
+            "E05"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C2",
+        "requiredEvidenceSets": [
+          [
+            "E03",
+            "E06"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [],
+        "contradictoryEvidenceIds": []
+      },
+      {
+        "claimId": "C3",
+        "requiredEvidenceSets": [
+          [
+            "E04"
+          ]
+        ],
+        "allowedSupportingEvidenceIds": [
+          "E01",
+          "E09"
+        ],
+        "contradictoryEvidenceIds": []
+      }
+    ],
+    "repairId": "R1",
+    "preventionId": "P1",
+    "verificationId": "V1",
+    "criticalOptionIds": [
+      "R4"
+    ],
+    "causalChain": [
+      {
+        "text": "必要な経路：D1/D2の字幕42と管理30を分離し、trunk両端で30,42を通す要件がある（E01）。",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      {
+        "text": "端末と近接通信：現行access42のGi1/Gi2にD1/D2のMACが学習され、端末IP/GWも正しく、同じedge内のD1→D2は成功する（E02/E05）。その成功は上流の通過を検証しない。",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      {
+        "text": "送出された探索：配信は別網にあるため、D1はGWを探すARPを送り、edge Gi24からtag42で出ている。返答0、TCP開始0（E03）。",
+        "evidenceIds": [
+          "E03"
+        ]
+      },
+      {
+        "text": "境界での判定：core Gi5の有効allowedは30だけ（E04）。同じ試験で42の物理受信3に対し破棄3、受入0で、P2には届かない（E06）。SVI42は本製品のautostate無効でupを維持し、core自己発信の成功は字幕端末の経路を検証しない。",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      {
+        "text": "原因と修復計画：物理リンクと30、配信サービスは正常（E07/E08）。承認集合から42が欠落したcore設定が原因。記録を保全し、core Gi5に42を追加して30,42と境界を維持する（E01/E04）。全VLAN許可へ広げない。",
+        "evidenceIds": [
+          "E07",
+          "E08",
+          "E01",
+          "E04"
+        ]
+      },
+      {
+        "text": "確認と再発防止：修復後はD1/D2からGWのARP、配信TCP443と字幕表示、管理30を確認する計画。現在の近接ping、自己診断、ランプの記録だけでは代替しない（E05/E07/E08）。両端と必要全VLANを照合し、業務通信を受入に含める。実施後成功はまだ観測していない。",
+        "evidenceIds": [
+          "E05",
+          "E07",
+          "E08"
+        ]
+      }
+    ],
+    "hypothesisFeedback": {
+      "H4": {
+        "text": "E07正常と30通信",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H5": {
+        "text": "E08正常。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "H1": {
+        "text": "E01/E04/E06",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E01/E02一致",
+        "evidenceIds": [
+          "E01",
+          "E02"
+        ]
+      },
+      "H3": {
+        "text": "E02同じ/E05直通信",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      }
+    },
+    "optionFeedback": {
+      "S1": {
+        "text": "E03/E05/E07",
+        "evidenceIds": [
+          "E03",
+          "E05",
+          "E07"
+        ]
+      },
+      "S2": {
+        "text": "E05/E07正常",
+        "evidenceIds": [
+          "E05",
+          "E07"
+        ]
+      },
+      "S3": {
+        "text": "E08正常",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "S4": {
+        "text": "E07正常",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H1": {
+        "text": "E01/E04/E06",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E06"
+        ]
+      },
+      "H2": {
+        "text": "E01/E02一致",
+        "evidenceIds": [
+          "E01",
+          "E02"
+        ]
+      },
+      "H3": {
+        "text": "E02同じ/E05直通信",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      "H4": {
+        "text": "E07正常と30通信",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "H5": {
+        "text": "E08正常。",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "R1": {
+        "text": "E01/E04/E06",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E06"
+        ]
+      },
+      "R2": {
+        "text": "別網serverはlocal次ホップでない（E01/E02/E08）",
+        "evidenceIds": [
+          "E01",
+          "E02",
+          "E08"
+        ]
+      },
+      "R3": {
+        "text": "E07正常、設定残る",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "R4": {
+        "text": "E01の分離を壊す",
+        "evidenceIds": [
+          "E01"
+        ]
+      },
+      "P1": {
+        "text": "E01/E04/E09",
+        "evidenceIds": [
+          "E01",
+          "E04",
+          "E09"
+        ]
+      },
+      "P2": {
+        "text": "E07だけでは42未確認",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "P3": {
+        "text": "E09と同じ見落とし",
+        "evidenceIds": [
+          "E09"
+        ]
+      },
+      "P4": {
+        "text": "必要だがL2設定を検知しない（E10/E06）",
+        "evidenceIds": [
+          "E10",
+          "E06"
+        ]
+      },
+      "V1": {
+        "text": "E03/E06/E07",
+        "evidenceIds": [
+          "E03",
+          "E06",
+          "E07"
+        ]
+      },
+      "V2": {
+        "text": "E05はtrunkを通らない",
+        "evidenceIds": [
+          "E05"
+        ]
+      },
+      "V3": {
+        "text": "E08は対象経路を通らない",
+        "evidenceIds": [
+          "E08"
+        ]
+      },
+      "V4": {
+        "text": "E07で既に緑",
+        "evidenceIds": [
+          "E07"
+        ]
+      },
+      "C1": {
+        "text": "現行ポートへの両MAC学習はE02、実通信はE05。正常設計だけを現行学習の証拠にしない",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      "C2": {
+        "text": "境界前の送出と入場判定の破棄を同時刻で結ぶ",
+        "evidenceIds": []
+      },
+      "C3": {
+        "text": "正常要件30,42は既知、E04の現在30だけで10点。設計/変更票だけは現行確認がなく補助5点",
+        "evidenceIds": [
+          "E04"
+        ]
+      },
+      "W1": {
+        "text": "E02の稼働access42とE05の同じVLAN内通信で反証。誤主張0点",
+        "evidenceIds": [
+          "E02",
+          "E05"
+        ]
+      },
+      "W2": {
+        "text": "E04のnative999一致とE06のVID42入場拒否に反するため0点",
+        "evidenceIds": [
+          "E04",
+          "E06"
+        ]
+      },
+      "W3": {
+        "text": "E03はtaggedVID42のARPを記録。誤主張0点",
+        "evidenceIds": [
+          "E03"
+        ]
+      }
+    },
+    "evidenceRoles": {
+      "E01": "既知の承認VLAN/trunk要件。C3補助。承認値をカード再添付で証明させない。",
+      "E02": "現行access42とGi1/Gi2へのD1/D2 MAC学習。C1実測設定側。設計情報だけで代替しない。",
+      "E03": "P1 tag42 ARP送出、返答0/SYN0。C2境界前。設定変更前の試験",
+      "E04": "trunk両端の有効集合、native一致、autostate disabledのSVI42。C3単独満点。L2メンバなしでも本製品はSVIをupに保つ。",
+      "E05": "同一edge内42の実通信。C1通信側。trunk通過成功ではない",
+      "E06": "同じ試験の物理受信、入場破棄とP2非受信。C2判定側。30の受入を42へ広げない",
+      "E07": "物理健全性と30正常対照。ケーブル断/全通信停止説の反証。42の異常を否定しない",
+      "E08": "配信サービス、L3許可、本館PCとcore SVI42自己発信の正常対照。字幕端末経路を通した修復後成功ではない。",
+      "E09": "増設の履歴と受入範囲。C3補助。履歴だけで現行値を代替しない",
+      "E10": "字幕原稿の改行修正。内容修正はARP入場判定の原因を立証せず、公開本文で反証を先出ししない。"
+    }
+  }
+}
