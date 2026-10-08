@@ -18,6 +18,7 @@ import { EvidenceView } from "../ui/EvidenceView";
 import { useGameAudio } from "../audio/useGameAudio";
 import { useTheme } from "./useTheme";
 import { modes, modeHash, modeForCase, listModeFromHash } from "../scenario/modes";
+import { backGame, navigateGame, previousGameRoute, replaceGameRoute } from "./navigation";
 type View = {
   screen: "title" | "list" | "brief" | "investigation" | "result";
   tab: Tab;
@@ -150,23 +151,18 @@ function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: C
         view.screen === "result") &&
       !attempt
     ) {
-      history.replaceState(null, "", modeHash(modeForCase(scenario.id)));
-      window.dispatchEvent(new Event("hashchange"));
+      replaceGameRoute(modeHash(modeForCase(scenario.id)));
       setView(read());
     } else if (
       locked &&
       (view.screen === "investigation" || view.screen === "brief")
     ) {
-      history.replaceState(null, "", hash("result"));
-      window.dispatchEvent(new Event("hashchange"));
+      replaceGameRoute(hash("result"));
       setView(read());
     } else if (view.screen === "result" && !locked) {
-      history.replaceState(
-        null,
-        "",
+      replaceGameRoute(
         attempt?.phase === "brief" ? hash("brief") : hash("investigation/topology"),
       );
-      window.dispatchEvent(new Event("hashchange"));
       setView(read());
     }
     if (view.screen === "result" && attempt?.phase === "submitted")
@@ -174,7 +170,20 @@ function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: C
   }, [view.screen, attempt?.phase]);
   const navigate = (target: string) => {
     const next = target === "#list" ? modeHash(view.screen === "list" ? modeId : entry.mode) : target.startsWith("#list/") || target === "#title" ? target : hash(target.slice(1));
-    if (location.hash !== next) location.hash = next;
+    navigateGame(next);
+  };
+  const back = async () => {
+    const previous = previousGameRoute() ?? "";
+    const previousCase = caseIdFromHash(previous) ?? (/^#(brief|investigation|result)(\/|$)/.test(previous) ? "case01" : null);
+    if (previousCase && previousCase !== scenario.id && !await flush()) return;
+    const fallback = view.screen === "list" ? "#title"
+      : view.screen === "brief" || (view.screen === "result" && !view.evidenceId) ? modeHash(entry.mode)
+      : view.screen === "result" ? hash("result")
+      : view.evidenceId ? hash("investigation/evidence")
+      : view.tab === "topology" ? hash("brief") : hash("investigation/topology");
+    backGame(fallback, previous => !(locked
+      && (caseIdFromHash(previous) ?? "case01") === scenario.id
+      && /^#(?:case\d+\/)?(?:brief|investigation)(?:\/|$)/.test(previous)));
   };
   const open = (id: string) => {
     dispatch({ type: "OPEN", evidenceId: id });
@@ -238,18 +247,21 @@ function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: C
     >
       {view.screen !== "title" && (
         <header className="app-header">
+          <div className="header-brand">
+          <button className="header-back" onClick={back} aria-label="前の画面に戻る" title="前の画面に戻る">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7" /></svg>
+            <small>戻る</small>
+          </button>
           <button
             className="brand"
             onClick={() => navigate("#list")}
             aria-label="事件一覧へ"
           >
-            <span className="brand-mark" aria-hidden="true">
-              通信
-            </span>
             <span>
               通信捜査室<small>NETWORK INVESTIGATION ROOM</small>
             </span>
           </button>
+          </div>
           <div className="header-tools">
             <span className="status-light">
               {saved ? "保存中断可" : "保存不可"}

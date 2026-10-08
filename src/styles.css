@@ -1264,6 +1264,39 @@ dialog::backdrop {
 .app-header {
   padding: max(8px, env(safe-area-inset-top)) 12px 8px;
 }
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.header-back {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  min-height: 44px;
+  padding: 3px;
+  gap: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.header-back svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.header-back small {
+  font-size: 10px;
+  line-height: 1.2;
+}
 .header-tools {
   flex-direction: row;
   align-items: center;
