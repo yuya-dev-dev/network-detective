@@ -151,12 +151,14 @@ function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: C
       !attempt
     ) {
       history.replaceState(null, "", modeHash(modeForCase(scenario.id)));
+      window.dispatchEvent(new Event("hashchange"));
       setView(read());
     } else if (
       locked &&
       (view.screen === "investigation" || view.screen === "brief")
     ) {
       history.replaceState(null, "", hash("result"));
+      window.dispatchEvent(new Event("hashchange"));
       setView(read());
     } else if (view.screen === "result" && !locked) {
       history.replaceState(
@@ -164,6 +166,7 @@ function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: C
         "",
         attempt?.phase === "brief" ? hash("brief") : hash("investigation/topology"),
       );
+      window.dispatchEvent(new Event("hashchange"));
       setView(read());
     }
     if (view.screen === "result" && attempt?.phase === "submitted")
@@ -283,7 +286,7 @@ function CaseApp({ entry, themeButton, selection, consumed, choose }: { entry: C
               </h1>
               <p className="title-tagline">記録を読み、真相をつなぐ。</p>
               <nav className="title-modes" aria-label="モード選択">
-                {modes.map(mode => <button key={mode.id} className="title-mode-button" onClick={() => navigate(modeHash(mode.id))} aria-label={`${mode.label}モードを選ぶ`}>
+                {modes.map(mode => <button key={mode.id} data-sound="select" className="title-mode-button" onClick={() => navigate(modeHash(mode.id))} aria-label={`${mode.label}モードを選ぶ`}>
                   <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
                   <span className="mode-count">{mode.caseIds.length ? `${mode.caseIds.length}事件` : "追加予定"}<b aria-hidden="true">↗</b></span>
                 </button>)}
